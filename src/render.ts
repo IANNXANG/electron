@@ -25,6 +25,18 @@ async function sendMessage(): Promise<void> {
     const message = messageInput.value.trim();
     if (!message) return;
 
+    // 检查是否为点击指令
+    const clickMatch = message.match(/click\((\d+),(\d+)\)/);
+    if (clickMatch) {
+        const x = parseInt(clickMatch[1]);
+        const y = parseInt(clickMatch[2]);
+        const { mouse } = require('@nut-tree/nut-js');
+        await mouse.setPosition({x, y});
+        await mouse.leftClick();
+        addMessage(`已点击位置 (${x}, ${y})`, true);
+        return;
+    }
+
     // 添加用户消息到历史记录
     messageHistory.push({ role: 'user', content: message });
     
