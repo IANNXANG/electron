@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>鼠标位置</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        #position {
+            font-size: 24px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>当前鼠标位置</h1>
+    <div id="position">(0, 0)</div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        ipcRenderer.on('update-mouse-position', (event, position) => {
+            document.getElementById('position').textContent = `(${position.x}, ${position.y})`;
+        });
+    </script>
+</body>
+</html>

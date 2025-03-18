@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 
 function createWindow() {
@@ -15,6 +15,28 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../src/index.html'));
 }
+
+let mousePositionWindow: BrowserWindow;
+
+ipcMain.on('open-mouse-position-window', () => {
+  mousePositionWindow = new BrowserWindow({
+    width: 400,
+    height: 200,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      webSecurity: true
+    }
+  });
+
+  mousePositionWindow.loadFile(path.join(__dirname, '../src/mouse-position.html'));
+});
+
+ipcMain.on('update-mouse-position', (event, position) => {
+  if (mousePositionWindow) {
+    mousePositionWindow.webContents.send('update-mouse-position', position);
+  }
+});
 
 app.whenReady().then(() => {
   createWindow();

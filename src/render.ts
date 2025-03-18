@@ -19,6 +19,13 @@ let messageHistory: Message[] = [];
 // 获取DOM元素
 const messageInput = document.getElementById('messageInput') as HTMLInputElement;
 const sendButton = document.getElementById('sendButton') as HTMLButtonElement;
+const mousePositionButton = document.createElement('button');
+mousePositionButton.id = 'mousePositionButton';
+mousePositionButton.textContent = '显示鼠标位置';
+const inputContainer = document.querySelector('.input-container');
+if (inputContainer) {
+  inputContainer.insertBefore(mousePositionButton, inputContainer.firstChild);
+}
 const chatMessages = document.getElementById('chatMessages') as HTMLDivElement;
 
 async function sendMessage(): Promise<void> {
@@ -83,6 +90,15 @@ function addMessage(text: string, isUser: boolean): void {
 
 // 添加事件监听器
 sendButton.addEventListener('click', sendMessage);
+mousePositionButton.addEventListener('click', async () => {
+  const { mouse } = require('@nut-tree/nut-js');
+  const { ipcRenderer } = require('electron');
+  ipcRenderer.send('open-mouse-position-window');
+  setInterval(async () => {
+    const position = await mouse.getPosition();
+    ipcRenderer.send('update-mouse-position', position);
+  }, 100);
+});
 messageInput.addEventListener('keypress', (e: KeyboardEvent) => {
     if (e.key === 'Enter') sendMessage();
 });
