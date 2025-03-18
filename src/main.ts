@@ -16,7 +16,7 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, '../src/index.html'));
 }
 
-let mousePositionWindow: BrowserWindow;
+let mousePositionWindow: BrowserWindow | null;
 
 ipcMain.on('open-mouse-position-window', () => {
   mousePositionWindow = new BrowserWindow({
@@ -30,10 +30,14 @@ ipcMain.on('open-mouse-position-window', () => {
   });
 
   mousePositionWindow.loadFile(path.join(__dirname, '../src/mouse-position.html'));
+
+  mousePositionWindow.on('closed', () => {
+    mousePositionWindow = null;
+  });
 });
 
 ipcMain.on('update-mouse-position', (event, position) => {
-  if (mousePositionWindow) {
+  if (mousePositionWindow && !mousePositionWindow.isDestroyed()) {
     mousePositionWindow.webContents.send('update-mouse-position', position);
   }
 });
