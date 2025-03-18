@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "tsc && electron ./dist/main.js",
+    "start": "ssh -L 8001:localhost:8001 -J zhouyang@10.61.190.11:18022 root@10.160.199.103 -p 30033 -f -N && tsc && electron ./dist/main.js",
     "build": "tsc",
     "watch": "tsc -w"
   },
