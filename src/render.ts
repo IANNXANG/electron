@@ -33,7 +33,7 @@ async function sendMessage(): Promise<void> {
     if (!message) return;
 
     // 检查是否为点击指令
-    const clickMatch = message.match(/click\((\d+),(\d+)\)/);
+    const clickMatch = message.match(/click\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
     if (clickMatch) {
         const x = parseInt(clickMatch[1]);
         const y = parseInt(clickMatch[2]);
@@ -74,6 +74,17 @@ async function sendMessage(): Promise<void> {
         
         // 添加机器人响应到界面
         addMessage(botResponse, false);
+
+        // 检查AI回复中是否包含点击指令
+        const aiClickMatch = message.match(/click\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
+        if (aiClickMatch) {
+            const x = parseInt(aiClickMatch[1]);
+            const y = parseInt(aiClickMatch[2]);
+            const { mouse } = require('@nut-tree/nut-js');
+            await mouse.setPosition({x, y});
+            await mouse.leftClick();
+            addMessage(`AI触发点击位置 (${x}, ${y})`, false);
+        }
     } catch (error) {
         console.error('Error:', error);
         addMessage('抱歉，发生了一些错误，请稍后再试。', false);
