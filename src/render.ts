@@ -23,12 +23,30 @@ interface Coordinates {
 let messageHistory: Message[] = [];
 
 // 存储系统提示词
-let systemPrompt: string = `你是一个专门处理鼠标操作的助手。你可以执行以下操作：
+let systemPrompt: string = `你是一个专门处理鼠标和键盘操作的助手。你可以执行以下操作：
 1. 左键单击：click(x,y)
 2. 左键双击：left_double(x,y)
 3. 右键单击：right_single(x,y)
 4. 拖拽操作：drag((x1,y1),(x2,y2))
-当用户给出坐标时，你只需要给出对应的执行命令即可，且只能给出一次。`;
+5. 热键操作：hotkey(key='command+c') 
+   支持的修饰键包括 command,alt,control,shift
+   Mac 常用热键示例：
+   - 复制：hotkey(key='command+c')
+   - 粘贴：hotkey(key='command+v')
+   - 剪切：hotkey(key='command+x')
+   - 全选：hotkey(key='command+a')
+   - 撤销：hotkey(key='command+z')
+   - 重做：hotkey(key='command+shift+z')
+   - 保存：hotkey(key='command+s')
+   - 新建：hotkey(key='command+n')
+   - 查找：hotkey(key='command+f')
+   - 关闭窗口：hotkey(key='command+w')
+   - 切换应用：hotkey(key='command+tab')
+   - 截图：hotkey(key='command+shift+3')
+   - 区域截图：hotkey(key='command+shift+4')
+6. 文本输入：type(content='要输入的文本')
+7. 滚动操作：scroll((x,y), direction='up/down/left/right')
+当用户给出操作指令时，你只需要给出对应的执行命令即可，且只能给出一次。`;
 
 // 添加延时函数
 function sleep(ms: number): Promise<void> {
@@ -46,9 +64,23 @@ async function smoothMove(start: Coordinates, end: Coordinates, steps: number = 
     }
 }
 
+// 添加系统命令执行函数
+async function executeSystemCommand(command: string): Promise<void> {
+    const { exec } = require('child_process');
+    return new Promise((resolve, reject) => {
+        exec(command, (error: any) => {
+            if (error) {
+                console.error(`执行命令失败: ${error}`);
+                reject(error);
+            }
+            resolve();
+        });
+    });
+}
+
 // 鼠标操作函数
 async function performMouseOperations(message: string): Promise<boolean> {
-    const { mouse, Button } = require('@nut-tree/nut-js');
+    const { mouse, Button, keyboard, Key } = require('@nut-tree/nut-js');
 
     // 匹配点击操作
     const clickMatch = message.match(/click\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
@@ -118,6 +150,119 @@ async function performMouseOperations(message: string): Promise<boolean> {
         } catch (error) {
             console.error('拖拽操作失败:', error);
             addMessage(`拖拽操作失败：从 (${x1}, ${y1}) 到 (${x2}, ${y2})`, true);
+            return true;
+        }
+    }
+
+    // 匹配热键操作
+    const hotkeyMatch = message.match(/hotkey\(key='([^']+)'\)/);
+    if (hotkeyMatch) {
+        const keyCombo = hotkeyMatch[1];
+        const keys = keyCombo.split('+').map(k => k.trim().toLowerCase());
+        
+        try {
+            // 处理特殊的系统热键
+            if (keyCombo === 'command+shift+3') {
+                // 全屏截图
+                await executeSystemCommand('screencapture ~/Desktop/screenshot.png');
+                addMessage(`已执行全屏截图，保存至桌面`, true);
+                return true;
+            }
+            if (keyCombo === 'command+shift+4') {
+                // 区域截图
+                await executeSystemCommand('screencapture -i ~/Desktop/screenshot.png');
+                addMessage(`已执行区域截图，保存至桌面`, true);
+                return true;
+            }
+
+            // 处理普通热键
+            const modifiers = [];
+            if (keys.includes('command')) modifiers.push(Key.LeftCmd);
+            if (keys.includes('alt')) modifiers.push(Key.Alt);
+            if (keys.includes('control')) modifiers.push(Key.LeftControl);
+            if (keys.includes('shift')) modifiers.push(Key.LeftShift);
+            
+            // 获取主键（最后一个键）
+            const mainKey = keys[keys.length - 1];
+            const keyToPress = Key[mainKey.charAt(0).toUpperCase() + mainKey.slice(1)] || mainKey;
+
+            // 按下所有修饰键
+            for (const modifier of modifiers) {
+                await keyboard.pressKey(modifier);
+            }
+            
+            // 按下并释放主键
+            await keyboard.pressKey(keyToPress);
+            await keyboard.releaseKey(keyToPress);
+            
+            // 释放所有修饰键（反序）
+            for (const modifier of modifiers.reverse()) {
+                await keyboard.releaseKey(modifier);
+            }
+            
+            addMessage(`已执行热键操作：${keyCombo}`, true);
+            return true;
+        } catch (error) {
+            console.error('热键操作失败:', error);
+            addMessage(`热键操作失败：${keyCombo}`, true);
+            return true;
+        }
+    }
+
+    // 匹配文本输入操作
+    const typeMatch = message.match(/type\(content='([^']+)'\)/);
+    if (typeMatch) {
+        const text = typeMatch[1];
+        try {
+            await keyboard.type(text);
+            addMessage(`已输入文本：${text}`, true);
+            return true;
+        } catch (error) {
+            console.error('文本输入失败:', error);
+            addMessage(`文本输入失败：${text}`, true);
+            return true;
+        }
+    }
+
+    // 匹配滚动操作
+    const scrollMatch = message.match(/scroll\(\((\d+)\s*,\s*(\d+)\)\s*,\s*direction='(up|down|left|right)'\)/);
+    if (scrollMatch) {
+        const x = parseInt(scrollMatch[1]);
+        const y = parseInt(scrollMatch[2]);
+        const direction = scrollMatch[3];
+        
+        try {
+            // 先移动到指定位置
+            await mouse.setPosition({x, y});
+            await sleep(200); // 增加等待时间确保鼠标到位
+
+            // 执行多次滚动
+            const scrollAmount = 500; // 增加滚动量
+            const scrollTimes = 3; // 执行次数
+            
+            for (let i = 0; i < scrollTimes; i++) {
+                switch (direction) {
+                    case 'up':
+                        await mouse.scrollUp(scrollAmount);
+                        break;
+                    case 'down':
+                        await mouse.scrollDown(scrollAmount);
+                        break;
+                    case 'left':
+                        await mouse.scrollLeft(scrollAmount);
+                        break;
+                    case 'right':
+                        await mouse.scrollRight(scrollAmount);
+                        break;
+                }
+                await sleep(100);
+            }
+            
+            addMessage(`已在位置(${x}, ${y})执行${direction}方向滚动`, true);
+            return true;
+        } catch (error) {
+            console.error('滚动操作失败:', error);
+            addMessage(`滚动操作失败：在位置(${x}, ${y})`, true);
             return true;
         }
     }
