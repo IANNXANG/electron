@@ -13,11 +13,81 @@ interface ApiResponse {
     }[];
 }
 
+// 定义坐标类型
+interface Coordinates {
+    x: number;
+    y: number;
+}
+
 // 存储对话历史
 let messageHistory: Message[] = [];
 
 // 存储系统提示词
-let systemPrompt: string = "你是一个专门处理鼠标点击操作的助手。当用户需要点击某个位置时，你可以使用 click(x,y) 格式来执行点击操作。请确保给出准确的坐标位置。";
+let systemPrompt: string = `你是一个专门处理鼠标操作的助手。你可以执行以下操作：
+1. 左键单击：click(x,y)
+2. 左键双击：left_double(x,y)
+3. 右键单击：right_single(x,y)
+4. 拖拽操作：drag((x1,y1),(x2,y2))
+请确保给出准确的坐标位置。`;
+
+// 鼠标操作函数
+async function performMouseOperations(message: string): Promise<boolean> {
+    const { mouse, Button } = require('@nut-tree/nut-js');
+
+    // 匹配点击操作
+    const clickMatch = message.match(/click\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    if (clickMatch) {
+        const x = parseInt(clickMatch[1]);
+        const y = parseInt(clickMatch[2]);
+        await mouse.setPosition({x, y});
+        await mouse.leftClick();
+        addMessage(`已执行左键单击：(${x}, ${y})`, true);
+        return true;
+    }
+
+    // 匹配双击操作
+    const doubleClickMatch = message.match(/left_double\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    if (doubleClickMatch) {
+        const x = parseInt(doubleClickMatch[1]);
+        const y = parseInt(doubleClickMatch[2]);
+        await mouse.setPosition({x, y});
+        await mouse.doubleClick(Button.LEFT);
+        addMessage(`已执行左键双击：(${x}, ${y})`, true);
+        return true;
+    }
+
+    // 匹配右键单击操作
+    const rightClickMatch = message.match(/right_single\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    if (rightClickMatch) {
+        const x = parseInt(rightClickMatch[1]);
+        const y = parseInt(rightClickMatch[2]);
+        await mouse.setPosition({x, y});
+        await mouse.rightClick();
+        addMessage(`已执行右键单击：(${x}, ${y})`, true);
+        return true;
+    }
+
+    // 匹配拖拽操作 - 方括号格式
+    const dragMatchBrackets = message.match(/drag\[\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*,\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*\]/);
+    // 匹配拖拽操作 - 圆括号格式
+    const dragMatchParens = message.match(/drag\(\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*,\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*\)/);
+    
+    const dragMatch = dragMatchBrackets || dragMatchParens;
+    if (dragMatch) {
+        const x1 = parseInt(dragMatch[1]);
+        const y1 = parseInt(dragMatch[2]);
+        const x2 = parseInt(dragMatch[3]);
+        const y2 = parseInt(dragMatch[4]);
+        await mouse.setPosition({x: x1, y: y1});
+        await mouse.pressButton(Button.LEFT);
+        await mouse.setPosition({x: x2, y: y2});
+        await mouse.releaseButton(Button.LEFT);
+        addMessage(`已执行拖拽：从 (${x1}, ${y1}) 到 (${x2}, ${y2})`, true);
+        return true;
+    }
+
+    return false;
+}
 
 // 获取DOM元素
 const messageInput = document.getElementById('messageInput') as HTMLInputElement;
@@ -43,15 +113,9 @@ async function sendMessage(): Promise<void> {
     const message = messageInput.value.trim();
     if (!message) return;
 
-    // 检查是否为点击指令
-    const clickMatch = message.match(/click\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
-    if (clickMatch) {
-        const x = parseInt(clickMatch[1]);
-        const y = parseInt(clickMatch[2]);
-        const { mouse } = require('@nut-tree/nut-js');
-        await mouse.setPosition({x, y});
-        await mouse.leftClick();
-        addMessage(`已点击位置 (${x}, ${y})`, true);
+    // 检查是否为鼠标操作指令
+    if (await performMouseOperations(message)) {
+        messageInput.value = '';
         return;
     }
 
@@ -82,7 +146,7 @@ async function sendMessage(): Promise<void> {
                     }))
                 ],
                 model: 'ui-tars',
-                temperature: 0.7,
+                temperature: 0,
                 max_tokens: 2000,
                 stream: false
             })
@@ -97,16 +161,8 @@ async function sendMessage(): Promise<void> {
         // 添加机器人响应到界面
         addMessage(botResponse, false);
 
-        // 检查AI回复中是否包含点击指令
-        const aiClickMatch = botResponse.match(/click\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
-        if (aiClickMatch) {
-            const x = parseInt(aiClickMatch[1]);
-            const y = parseInt(aiClickMatch[2]);
-            const { mouse } = require('@nut-tree/nut-js');
-            await mouse.setPosition({x, y});
-            await mouse.leftClick();
-            addMessage(`AI触发点击位置 (${x}, ${y})`, false);
-        }
+        // 检查AI回复中是否包含鼠标操作指令
+        await performMouseOperations(botResponse);
     } catch (error) {
         console.error('Error:', error);
         addMessage('抱歉，发生了一些错误，请稍后再试。', false);
