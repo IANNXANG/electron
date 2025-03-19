@@ -545,12 +545,24 @@ messageInput.addEventListener('keypress', (e: KeyboardEvent) => {
 screenshotButton.addEventListener('click', captureScreenshot);
 
 // 添加图片处理函数
-async function handleImageUpload(file: File): Promise<string> {
+async function handleImageUpload(file: File): Promise<{ base64String: string; resolution: { width: number; height: number } }> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
             const base64String = reader.result as string;
-            resolve(base64String);
+            // 创建一个临时图片元素来获取分辨率
+            const img = new Image();
+            img.onload = () => {
+                resolve({
+                    base64String,
+                    resolution: {
+                        width: img.width,
+                        height: img.height
+                    }
+                });
+            };
+            img.onerror = () => reject(new Error('无法加载图片'));
+            img.src = base64String;
         };
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(file);
@@ -558,7 +570,7 @@ async function handleImageUpload(file: File): Promise<string> {
 }
 
 // 创建图片预览元素
-function createImagePreview(base64Image: string): HTMLElement {
+function createImagePreview(base64Image: string, resolution?: { width: number; height: number }): HTMLElement {
     const container = document.createElement('div');
     container.style.position = 'relative';
     container.style.display = 'inline-block';
@@ -586,6 +598,18 @@ function createImagePreview(base64Image: string): HTMLElement {
 
     container.appendChild(img);
     container.appendChild(removeButton);
+
+    // 如果提供了分辨率信息，添加分辨率标签
+    if (resolution) {
+        const resolutionLabel = document.createElement('div');
+        resolutionLabel.textContent = `(${resolution.width}, ${resolution.height})`;
+        resolutionLabel.style.fontSize = '12px';
+        resolutionLabel.style.color = '#666';
+        resolutionLabel.style.textAlign = 'center';
+        resolutionLabel.style.marginTop = '5px';
+        container.appendChild(resolutionLabel);
+    }
+
     return container;
 }
 
@@ -600,11 +624,11 @@ imageInput.addEventListener('change', async (event) => {
     
     if (file) {
         try {
-            const base64Image = await handleImageUpload(file);
-            currentImage = base64Image;
+            const { base64String, resolution } = await handleImageUpload(file);
+            currentImage = base64String;
             
-            // 创建预览
-            const previewContainer = createImagePreview(base64Image);
+            // 创建预览（包含分辨率信息）
+            const previewContainer = createImagePreview(base64String, resolution);
             messageInput.parentElement?.insertBefore(previewContainer, messageInput);
             
             // 清除文件输入
@@ -628,13 +652,8 @@ async function captureScreenshot(): Promise<void> {
             const { screenshot, resolution } = result;
             currentImage = screenshot;
             
-            // 创建预览
-            const previewContainer = createImagePreview(screenshot);
-            
-            // 添加分辨率提示
-            const resolutionText = `屏幕分辨率: (${resolution.width}, ${resolution.height})`;
-            addMessage(resolutionText, false);
-            
+            // 创建预览（包含分辨率信息）
+            const previewContainer = createImagePreview(screenshot, resolution);
             messageInput.parentElement?.insertBefore(previewContainer, messageInput);
         }
     } catch (error) {
