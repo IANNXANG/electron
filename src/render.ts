@@ -25,9 +25,17 @@ const sendButton = document.getElementById('sendButton') as HTMLButtonElement;
 const mousePositionButton = document.createElement('button');
 mousePositionButton.id = 'mousePositionButton';
 mousePositionButton.textContent = '显示鼠标位置';
+
+// 创建清除上下文按钮
+const clearContextButton = document.createElement('button');
+clearContextButton.id = 'clearContextButton';
+clearContextButton.textContent = '清除上下文';
+clearContextButton.style.marginRight = '10px';
+
 const inputContainer = document.querySelector('.input-container');
 if (inputContainer) {
-  inputContainer.insertBefore(mousePositionButton, inputContainer.firstChild);
+    inputContainer.insertBefore(clearContextButton, inputContainer.firstChild);
+    inputContainer.insertBefore(mousePositionButton, inputContainer.firstChild);
 }
 const chatMessages = document.getElementById('chatMessages') as HTMLDivElement;
 
@@ -113,17 +121,25 @@ function addMessage(text: string, isUser: boolean): void {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// 添加清除上下文的功能
+function clearContext(): void {
+    messageHistory = [];
+    chatMessages.innerHTML = '';
+    addMessage('上下文已清除。', false);
+}
+
 // 添加事件监听器
 sendButton.addEventListener('click', sendMessage);
 mousePositionButton.addEventListener('click', async () => {
-  const { mouse } = require('@nut-tree/nut-js');
-  const { ipcRenderer } = require('electron');
-  ipcRenderer.send('open-mouse-position-window');
-  setInterval(async () => {
-    const position = await mouse.getPosition();
-    ipcRenderer.send('update-mouse-position', position);
-  }, 100);
+    const { mouse } = require('@nut-tree/nut-js');
+    const { ipcRenderer } = require('electron');
+    ipcRenderer.send('open-mouse-position-window');
+    setInterval(async () => {
+        const position = await mouse.getPosition();
+        ipcRenderer.send('update-mouse-position', position);
+    }, 100);
 });
+clearContextButton.addEventListener('click', clearContext);
 messageInput.addEventListener('keypress', (e: KeyboardEvent) => {
     if (e.key === 'Enter') sendMessage();
 });
