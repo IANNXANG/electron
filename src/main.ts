@@ -37,11 +37,14 @@ function createWindow() {
 // 创建鼠标位置窗口
 function createMousePositionWindow() {
     mousePositionWindow = new BrowserWindow({
-        width: 100,
-        height: 50,
-        frame: false,
-        transparent: true,
+        width: 200,
+        height: 100,
+        frame: true,
+        transparent: false,
         alwaysOnTop: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false
@@ -49,6 +52,19 @@ function createMousePositionWindow() {
     });
 
     mousePositionWindow.loadFile(path.join(__dirname, '../src/mouse-position.html'));
+
+    // 监听窗口关闭事件
+    mousePositionWindow.on('closed', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('mouse-position-window-closed');
+        }
+        mousePositionWindow = null;
+    });
+
+    // 设置窗口位置在屏幕右上角
+    const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
+    const windowBounds = mousePositionWindow.getBounds();
+    mousePositionWindow.setPosition(screenWidth - windowBounds.width - 20, 40);
 }
 
 app.whenReady().then(async () => {
@@ -74,6 +90,13 @@ ipcMain.on('open-mouse-position-window', () => {
 ipcMain.on('update-mouse-position', (event, position) => {
     if (mousePositionWindow && !mousePositionWindow.isDestroyed()) {
         mousePositionWindow.webContents.send('update-mouse-position', position);
+    }
+});
+
+ipcMain.on('close-mouse-position-window', () => {
+    if (mousePositionWindow && !mousePositionWindow.isDestroyed()) {
+        mousePositionWindow.close();
+        mousePositionWindow = null;
     }
 });
 

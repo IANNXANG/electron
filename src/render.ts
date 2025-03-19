@@ -453,14 +453,50 @@ function clearContext(): void {
 
 // 添加事件监听器
 sendButton.addEventListener('click', sendMessage);
+let mousePositionInterval: NodeJS.Timeout | null = null;
+
 mousePositionButton.addEventListener('click', async () => {
     const { mouse } = require('@nut-tree/nut-js');
     const { ipcRenderer } = require('electron');
-    ipcRenderer.send('open-mouse-position-window');
-    setInterval(async () => {
-        const position = await mouse.getPosition();
-        ipcRenderer.send('update-mouse-position', position);
-    }, 100);
+
+    try {
+        // 如果已经在运行，则停止并返回
+        if (mousePositionInterval) {
+            clearInterval(mousePositionInterval);
+            mousePositionInterval = null;
+            ipcRenderer.send('close-mouse-position-window');
+            return;
+        }
+
+        // 打开新窗口
+        ipcRenderer.send('open-mouse-position-window');
+
+        // 设置定时器获取鼠标位置
+        mousePositionInterval = setInterval(async () => {
+            try {
+                const position = await mouse.getPosition();
+                ipcRenderer.send('update-mouse-position', position);
+            } catch (error) {
+                console.error('获取鼠标位置失败:', error);
+                // 如果发生错误，清理并关闭窗口
+                if (mousePositionInterval) {
+                    clearInterval(mousePositionInterval);
+                    mousePositionInterval = null;
+                }
+                ipcRenderer.send('close-mouse-position-window');
+            }
+        }, 100);
+
+        // 监听窗口关闭事件
+        ipcRenderer.on('mouse-position-window-closed', () => {
+            if (mousePositionInterval) {
+                clearInterval(mousePositionInterval);
+                mousePositionInterval = null;
+            }
+        });
+    } catch (error) {
+        console.error('初始化鼠标位置监听失败:', error);
+    }
 });
 clearContextButton.addEventListener('click', clearContext);
 messageInput.addEventListener('keypress', (e: KeyboardEvent) => {

@@ -5,22 +5,41 @@
     <title>鼠标位置</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
+            margin: 0;
+            padding: 15px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #ffffff;
+            user-select: none;
+        }
+        #container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+        #label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
         }
         #position {
-            font-size: 24px;
-            margin-top: 20px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
         }
     </style>
 </head>
 <body>
-    <h1>当前鼠标位置</h1>
-    <div id="position">(0, 0)</div>
+    <div id="container">
+        <div id="label">鼠标坐标</div>
+        <div id="position">(0, 0)</div>
+    </div>
 
     <script>
         const { ipcRenderer } = require('electron');
+        
+        // 更新位置显示
         ipcRenderer.on('update-mouse-position', (event, position) => {
             document.getElementById('position').textContent = `(${position.x}, ${position.y})`;
         });
