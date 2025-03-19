@@ -1,6 +1,6 @@
 // 定义消息类型
 interface Message {
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'system';
     content: string;
 }
 
@@ -15,6 +15,9 @@ interface ApiResponse {
 
 // 存储对话历史
 let messageHistory: Message[] = [];
+
+// 存储系统提示词
+let systemPrompt: string = "你是一个专门处理鼠标点击操作的助手。当用户需要点击某个位置时，你可以使用 click(x,y) 格式来执行点击操作。请确保给出准确的坐标位置。";
 
 // 获取DOM元素
 const messageInput = document.getElementById('messageInput') as HTMLInputElement;
@@ -59,10 +62,21 @@ async function sendMessage(): Promise<void> {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                messages: messageHistory,
+                messages: [
+                    { 
+                        role: 'system', 
+                        content: systemPrompt,
+                        name: 'system'
+                    },
+                    ...messageHistory.map(msg => ({
+                        ...msg,
+                        name: msg.role === 'user' ? 'user' : 'assistant'
+                    }))
+                ],
                 model: 'ui-tars',
                 temperature: 0.7,
-                max_tokens: 2000
+                max_tokens: 2000,
+                stream: false
             })
         });
 
@@ -76,7 +90,7 @@ async function sendMessage(): Promise<void> {
         addMessage(botResponse, false);
 
         // 检查AI回复中是否包含点击指令
-        const aiClickMatch = message.match(/click\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
+        const aiClickMatch = botResponse.match(/click\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
         if (aiClickMatch) {
             const x = parseInt(aiClickMatch[1]);
             const y = parseInt(aiClickMatch[2]);
