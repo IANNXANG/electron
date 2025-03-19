@@ -622,13 +622,19 @@ async function captureScreenshot(): Promise<void> {
     
     try {
         // 通知主进程开始截图
-        const base64Image = await ipcRenderer.invoke('capture-screenshot');
+        const result = await ipcRenderer.invoke('capture-screenshot');
         
-        if (base64Image) {
-            currentImage = base64Image;
+        if (result) {
+            const { screenshot, resolution } = result;
+            currentImage = screenshot;
             
             // 创建预览
-            const previewContainer = createImagePreview(base64Image);
+            const previewContainer = createImagePreview(screenshot);
+            
+            // 添加分辨率提示
+            const resolutionText = `屏幕分辨率: (${resolution.width}, ${resolution.height})`;
+            addMessage(resolutionText, false);
+            
             messageInput.parentElement?.insertBefore(previewContainer, messageInput);
         }
     } catch (error) {

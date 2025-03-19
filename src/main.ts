@@ -111,13 +111,14 @@ ipcMain.handle('capture-screenshot', async () => {
         
         // 获取主显示器
         const primaryDisplay = screen.getPrimaryDisplay();
+        const { width, height } = primaryDisplay.size;
         
         // 捕获屏幕
         const sources = await desktopCapturer.getSources({
             types: ['screen'],
             thumbnailSize: {
-                width: primaryDisplay.size.width,
-                height: primaryDisplay.size.height
+                width,
+                height
             }
         });
         
@@ -127,7 +128,13 @@ ipcMain.handle('capture-screenshot', async () => {
         // 显示主窗口
         mainWindow?.show();
         
-        return screenshot;
+        return {
+            screenshot,
+            resolution: {
+                width,
+                height
+            }
+        };
     } catch (error) {
         console.error('Screenshot error:', error);
         mainWindow?.show();
