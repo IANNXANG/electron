@@ -28,7 +28,23 @@ let systemPrompt: string = `你是一个专门处理鼠标操作的助手。你�
 2. 左键双击：left_double(x,y)
 3. 右键单击：right_single(x,y)
 4. 拖拽操作：drag((x1,y1),(x2,y2))
-请确保给出准确的坐标位置。`;
+当用户给出坐标时，你只需要给出对应的执行命令即可，且只能给出一次。`;
+
+// 添加延时函数
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// 添加平滑移动函数
+async function smoothMove(start: Coordinates, end: Coordinates, steps: number = 20): Promise<void> {
+    const { mouse } = require('@nut-tree/nut-js');
+    for (let i = 0; i <= steps; i++) {
+        const x = Math.round(start.x + (end.x - start.x) * (i / steps));
+        const y = Math.round(start.y + (end.y - start.y) * (i / steps));
+        await mouse.setPosition({x, y});
+        await sleep(10); // 每步延时10ms
+    }
+}
 
 // 鼠标操作函数
 async function performMouseOperations(message: string): Promise<boolean> {
@@ -78,12 +94,32 @@ async function performMouseOperations(message: string): Promise<boolean> {
         const y1 = parseInt(dragMatch[2]);
         const x2 = parseInt(dragMatch[3]);
         const y2 = parseInt(dragMatch[4]);
-        await mouse.setPosition({x: x1, y: y1});
-        await mouse.pressButton(Button.LEFT);
-        await mouse.setPosition({x: x2, y: y2});
-        await mouse.releaseButton(Button.LEFT);
-        addMessage(`已执行拖拽：从 (${x1}, ${y1}) 到 (${x2}, ${y2})`, true);
-        return true;
+        
+        try {
+            // 1. 移动到起始位置
+            await mouse.setPosition({x: x1, y: y1});
+            await sleep(100); // 等待100ms确保位置正确
+            
+            // 2. 按下左键
+            await mouse.pressButton(Button.LEFT);
+            await sleep(100); // 等待100ms确保按键被识别
+            
+            // 3. 平滑移动到目标位置
+            await smoothMove({x: x1, y: y1}, {x: x2, y: y2});
+            
+            // 4. 在目标位置稍作停留
+            await sleep(100);
+            
+            // 5. 释放左键
+            await mouse.releaseButton(Button.LEFT);
+            
+            addMessage(`已执行拖拽：从 (${x1}, ${y1}) 到 (${x2}, ${y2})`, true);
+            return true;
+        } catch (error) {
+            console.error('拖拽操作失败:', error);
+            addMessage(`拖拽操作失败：从 (${x1}, ${y1}) 到 (${x2}, ${y2})`, true);
+            return true;
+        }
     }
 
     return false;
