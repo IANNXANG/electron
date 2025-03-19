@@ -64,6 +64,30 @@ async function smoothMove(start: Coordinates, end: Coordinates, steps: number = 
     }
 }
 
+// 添加平滑滚动函数
+async function smoothScroll(direction: string, totalAmount: number, steps: number = 20): Promise<void> {
+    const { mouse } = require('@nut-tree/nut-js');
+    const amountPerStep = Math.round(totalAmount / steps);
+    
+    for (let i = 0; i < steps; i++) {
+        switch (direction) {
+            case 'up':
+                await mouse.scrollUp(amountPerStep);
+                break;
+            case 'down':
+                await mouse.scrollDown(amountPerStep);
+                break;
+            case 'left':
+                await mouse.scrollLeft(amountPerStep);
+                break;
+            case 'right':
+                await mouse.scrollRight(amountPerStep);
+                break;
+        }
+        await sleep(20); // 每步之间添加短暂延迟
+    }
+}
+
 // 添加系统命令执行函数
 async function executeSystemCommand(command: string): Promise<void> {
     const { exec } = require('child_process');
@@ -234,31 +258,19 @@ async function performMouseOperations(message: string): Promise<boolean> {
         try {
             // 先移动到指定位置
             await mouse.setPosition({x, y});
-            await sleep(200); // 增加等待时间确保鼠标到位
+            await sleep(200); // 等待鼠标到位
 
-            // 执行多次滚动
-            const scrollAmount = 500; // 增加滚动量
-            const scrollTimes = 3; // 执行次数
+            // 执行平滑滚动
+            const totalScrollAmount = 500; // 减少总滚动量
+            const scrollSteps = 20; // 减少步数以加快速度
             
-            for (let i = 0; i < scrollTimes; i++) {
-                switch (direction) {
-                    case 'up':
-                        await mouse.scrollUp(scrollAmount);
-                        break;
-                    case 'down':
-                        await mouse.scrollDown(scrollAmount);
-                        break;
-                    case 'left':
-                        await mouse.scrollLeft(scrollAmount);
-                        break;
-                    case 'right':
-                        await mouse.scrollRight(scrollAmount);
-                        break;
-                }
-                await sleep(100);
+            // 执行2次平滑滚动（减少次数）
+            for (let i = 0; i < 2; i++) {
+                await smoothScroll(direction, totalScrollAmount, scrollSteps);
+                await sleep(30); // 减少滚动间隔
             }
             
-            addMessage(`已在位置(${x}, ${y})执行${direction}方向滚动`, true);
+            addMessage(`已在位置(${x}, ${y})执行${direction}方向平滑滚动`, true);
             return true;
         } catch (error) {
             console.error('滚动操作失败:', error);
