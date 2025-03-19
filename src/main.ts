@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, systemPreferences } from 'electron';
+import { app, BrowserWindow, ipcMain, systemPreferences, screen, desktopCapturer } from 'electron';
 import * as path from 'path';
 
 async function requestScreenAccess() {
@@ -18,57 +18,96 @@ async function requestScreenAccess() {
     }
 }
 
-function createWindow() {
-  const mainWindow = new BrowserWindow({
-    width: 600,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      webSecurity: true
-    }
-  });
-
-
-  mainWindow.loadFile(path.join(__dirname, '../src/index.html'));
-}
-
+let mainWindow: BrowserWindow | null;
 let mousePositionWindow: BrowserWindow | null;
 
-ipcMain.on('open-mouse-position-window', () => {
-  mousePositionWindow = new BrowserWindow({
-    width: 400,
-    height: 200,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      webSecurity: true
-    }
-  });
+function createWindow() {
+    mainWindow = new BrowserWindow({
+        width: 800,
+        height: 600,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
 
-  mousePositionWindow.loadFile(path.join(__dirname, '../src/mouse-position.html'));
+    mainWindow.loadFile(path.join(__dirname, '../src/index.html'));
+}
 
-  mousePositionWindow.on('closed', () => {
-    mousePositionWindow = null;
-  });
-});
+// 创建鼠标位置窗口
+function createMousePositionWindow() {
+    mousePositionWindow = new BrowserWindow({
+        width: 100,
+        height: 50,
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
 
-ipcMain.on('update-mouse-position', (event, position) => {
-  if (mousePositionWindow && !mousePositionWindow.isDestroyed()) {
-    mousePositionWindow.webContents.send('update-mouse-position', position);
-  }
-});
+    mousePositionWindow.loadFile(path.join(__dirname, '../src/mouse-position.html'));
+}
 
 app.whenReady().then(async () => {
-  // 启动时请求必要的权限
-  await requestScreenAccess();
-  createWindow();
+    // 启动时请求必要的权限
+    await requestScreenAccess();
+    createWindow();
 
-  app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+    app.on('activate', function () {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
 });
 
 app.on('window-all-closed', function () {
-  if (process.platform !== 'darwin') app.quit();
+    if (process.platform !== 'darwin') app.quit();
+});
+
+ipcMain.on('open-mouse-position-window', () => {
+    if (!mousePositionWindow || mousePositionWindow.isDestroyed()) {
+        createMousePositionWindow();
+    }
+});
+
+ipcMain.on('update-mouse-position', (event, position) => {
+    if (mousePositionWindow && !mousePositionWindow.isDestroyed()) {
+        mousePositionWindow.webContents.send('update-mouse-position', position);
+    }
+});
+
+// 添加截图功能
+ipcMain.handle('capture-screenshot', async () => {
+    try {
+        // 隐藏主窗口
+        mainWindow?.hide();
+        
+        // 等待一小段时间确保窗口完全隐藏
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // 获取主显示器
+        const primaryDisplay = screen.getPrimaryDisplay();
+        
+        // 捕获屏幕
+        const sources = await desktopCapturer.getSources({
+            types: ['screen'],
+            thumbnailSize: {
+                width: primaryDisplay.size.width,
+                height: primaryDisplay.size.height
+            }
+        });
+        
+        // 获取截图
+        const screenshot = sources[0].thumbnail.toDataURL();
+        
+        // 显示主窗口
+        mainWindow?.show();
+        
+        return screenshot;
+    } catch (error) {
+        console.error('Screenshot error:', error);
+        mainWindow?.show();
+        return null;
+    }
 });

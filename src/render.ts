@@ -24,18 +24,38 @@ interface Coordinates {
 let messageHistory: Message[] = [];
 
 // 存储系统提示词
-let systemPrompt: string = `你是一个支持图文理解的AI助手。你可以：
-1. 分析用户上传的图片内容
-2. 回答关于图片的问题
-3. 执行以下鼠标和键盘操作：
-   - 左键单击：click(x,y)
-   - 左键双击：left_double(x,y)
-   - 右键单击：right_single(x,y)
-   - 拖拽操作：drag((x1,y1),(x2,y2))
-   - 热键操作：hotkey(key='command+c')
-   - 文本输入：type(content='要输入的文本')
-   - 滚动操作：scroll((x,y), direction='up/down/left/right')
-请根据用户的输入和图片内容给出合适的回应。`;
+let systemPrompt: string = `你是一个专门处理图像分析和自动化操作的AI助手。你的主要任务是：
+
+1. 分析用户上传的截图内容：
+   - 识别界面元素的位置和类型（按钮、文本框、链接等）
+   - 理解界面布局和结构
+   - 定位用户指定的目标元素
+
+2. 根据用户的指令和截图，生成精确的操作命令：
+   - 如果用户说"点击xxx"，你需要在截图中定位该元素，并输出 click(x,y) 命令
+   - 如果用户说"双击xxx"，输出 left_double(x,y) 命令
+   - 如果用户说"右键xxx"，输出 right_single(x,y) 命令
+   - 如果用户要求拖拽操作，输出 drag((x1,y1),(x2,y2)) 命令
+   - 如果需要输入文本，输出 type(content='文本内容') 命令
+   - 如果需要滚动，输出 scroll((x,y), direction='up/down/left/right') 命令
+   - 如果需要快捷键，输出 hotkey(key='组合键') 命令
+
+3. 响应规范：
+   - 首先描述你在截图中看到的内容
+   - 然后解释你将如何执行用户的指令
+   - 最后输出准确的命令格式
+   - 确保命令格式完全符合规范，这样才能被系统正确识别和执行
+
+4. 命令示例：
+   - 点击：click(100,200)
+   - 双击：left_double(100,200)
+   - 右键：right_single(100,200)
+   - 拖拽：drag((100,200),(300,400))
+   - 输入：type(content='要输入的文本')
+   - 滚动：scroll((100,200), direction='up')
+   - 热键：hotkey(key='command+c')
+
+请记住：你的主要目标是通过分析截图和理解用户指令，生成准确的操作命令。命令必须严格遵循上述格式，这样才能被系统识别和执行。`;
 
 // 添加延时函数
 function sleep(ms: number): Promise<void> {
@@ -280,6 +300,18 @@ const mousePositionButton = document.createElement('button');
 mousePositionButton.id = 'mousePositionButton';
 mousePositionButton.textContent = '显示鼠标位置';
 
+// 创建截图按钮
+const screenshotButton = document.createElement('button');
+screenshotButton.id = 'screenshotButton';
+screenshotButton.className = 'screenshot-button';
+screenshotButton.innerHTML = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M8 8h.01"/>
+    </svg>
+`;
+
 // 创建清除上下文按钮
 const clearContextButton = document.createElement('button');
 clearContextButton.id = 'clearContextButton';
@@ -290,6 +322,7 @@ const inputContainer = document.querySelector('.input-container');
 if (inputContainer) {
     inputContainer.insertBefore(clearContextButton, inputContainer.firstChild);
     inputContainer.insertBefore(mousePositionButton, inputContainer.firstChild);
+    inputContainer.insertBefore(screenshotButton, inputContainer.firstChild);
 }
 const chatMessages = document.getElementById('chatMessages') as HTMLDivElement;
 
@@ -309,7 +342,7 @@ async function sendMessage(): Promise<void> {
     // 添加用户消息到历史记录
     const userMessage: Message = {
         role: 'user',
-        content: message,
+        content: message || '请分析这张图片',
     };
     
     if (currentImage) {
@@ -337,10 +370,32 @@ async function sendMessage(): Promise<void> {
                         content: systemPrompt,
                         name: 'system'
                     },
-                    ...messageHistory.map(msg => ({
-                        ...msg,
-                        name: msg.role === 'user' ? 'user' : 'assistant'
-                    }))
+                    ...messageHistory.map(msg => {
+                        // 构建消息对象
+                        const msgObj: any = {
+                            role: msg.role,
+                            name: msg.role === 'user' ? 'user' : 'assistant',
+                            content: msg.content
+                        };
+                        
+                        // 如果有图片，添加到content中
+                        if (msg.image) {
+                            msgObj.content = [
+                                {
+                                    type: "text",
+                                    text: msg.content || "请分析这张图片"
+                                },
+                                {
+                                    type: "image_url",
+                                    image_url: {
+                                        url: msg.image
+                                    }
+                                }
+                            ];
+                        }
+                        
+                        return msgObj;
+                    })
                 ],
                 model: 'ui-tars',
                 temperature: 0,
@@ -411,6 +466,9 @@ clearContextButton.addEventListener('click', clearContext);
 messageInput.addEventListener('keypress', (e: KeyboardEvent) => {
     if (e.key === 'Enter') sendMessage();
 });
+
+// 添加截图按钮事件监听
+screenshotButton.addEventListener('click', captureScreenshot);
 
 // 添加图片处理函数
 async function handleImageUpload(file: File): Promise<string> {
@@ -483,3 +541,24 @@ imageInput.addEventListener('change', async (event) => {
         }
     }
 });
+
+// 添加截图功能
+async function captureScreenshot(): Promise<void> {
+    const { ipcRenderer } = require('electron');
+    
+    try {
+        // 通知主进程开始截图
+        const base64Image = await ipcRenderer.invoke('capture-screenshot');
+        
+        if (base64Image) {
+            currentImage = base64Image;
+            
+            // 创建预览
+            const previewContainer = createImagePreview(base64Image);
+            messageInput.parentElement?.insertBefore(previewContainer, messageInput);
+        }
+    } catch (error) {
+        console.error('Screenshot failed:', error);
+        addMessage('截图失败，请重试。', false);
+    }
+}

@@ -120,3 +120,20 @@ body {
     border-radius: 8px;
     margin: 5px 0;
 }
+
+.screenshot-button {
+    padding: 8px;
+    background: #f0f0f0;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    transition: background-color 0.2s;
+}
+
+.screenshot-button:hover {
+    background: #e0e0e0;
+}
