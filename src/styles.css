@@ -60,6 +60,7 @@ body {
     border-top: 1px solid #e0e0e0;
     display: flex;
     gap: 10px;
+    align-items: center;
 }
 
 #messageInput {
@@ -83,4 +84,39 @@ body {
 
 #sendButton:hover {
     background: #0056b3;
+}
+
+.upload-button {
+    padding: 8px;
+    background: #f0f0f0;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    transition: background-color 0.2s;
+}
+
+.upload-button:hover {
+    background: #e0e0e0;
+}
+
+.image-preview {
+    max-width: 200px;
+    margin: 10px 0;
+    position: relative;
+    display: inline-block;
+}
+
+.image-preview img {
+    max-width: 100%;
+    border-radius: 8px;
+}
+
+.message img {
+    max-width: 200px;
+    border-radius: 8px;
+    margin: 5px 0;
 }

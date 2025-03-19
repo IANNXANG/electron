@@ -2,6 +2,7 @@
 interface Message {
     role: 'user' | 'assistant' | 'system';
     content: string;
+    image?: string;  // base64格式的图片数据
 }
 
 // 定义API响应类型
@@ -23,24 +24,18 @@ interface Coordinates {
 let messageHistory: Message[] = [];
 
 // 存储系统提示词
-let systemPrompt: string = `你是一个专门处理鼠标和键盘操作的助手。你可以执行以下操作：
-1. 左键单击：click(x,y)
-2. 左键双击：left_double(x,y)
-3. 右键单击：right_single(x,y)
-4. 拖拽操作：drag((x1,y1),(x2,y2))
-5. 热键操作：hotkey(key='command+c') 
-   支持的修饰键包括 command,alt,control,shift
-   Mac 常用热键示例：
-   - 复制：hotkey(key='command+c')
-   - 粘贴：hotkey(key='command+v')
-   - 剪切：hotkey(key='command+x')
-   - 关闭窗口：hotkey(key='command+w')
-   - 切换应用：hotkey(key='command+tab')
-   - 截图：hotkey(key='command+shift+3')
-   - 区域截图：hotkey(key='command+shift+4')
-6. 文本输入：type(content='要输入的文本')
-7. 滚动操作：scroll((x,y), direction='up/down/left/right')
-当用户给出操作指令时，你只需要给出对应的执行命令即可，且只能给出一次。`;
+let systemPrompt: string = `你是一个支持图文理解的AI助手。你可以：
+1. 分析用户上传的图片内容
+2. 回答关于图片的问题
+3. 执行以下鼠标和键盘操作：
+   - 左键单击：click(x,y)
+   - 左键双击：left_double(x,y)
+   - 右键单击：right_single(x,y)
+   - 拖拽操作：drag((x1,y1),(x2,y2))
+   - 热键操作：hotkey(key='command+c')
+   - 文本输入：type(content='要输入的文本')
+   - 滚动操作：scroll((x,y), direction='up/down/left/right')
+请根据用户的输入和图片内容给出合适的回应。`;
 
 // 添加延时函数
 function sleep(ms: number): Promise<void> {
@@ -279,6 +274,8 @@ async function performMouseOperations(message: string): Promise<boolean> {
 // 获取DOM元素
 const messageInput = document.getElementById('messageInput') as HTMLInputElement;
 const sendButton = document.getElementById('sendButton') as HTMLButtonElement;
+const imageInput = document.getElementById('imageInput') as HTMLInputElement;
+const uploadButton = document.getElementById('uploadButton') as HTMLButtonElement;
 const mousePositionButton = document.createElement('button');
 mousePositionButton.id = 'mousePositionButton';
 mousePositionButton.textContent = '显示鼠标位置';
@@ -296,22 +293,35 @@ if (inputContainer) {
 }
 const chatMessages = document.getElementById('chatMessages') as HTMLDivElement;
 
+// 当前上传的图片
+let currentImage: string | null = null;
+
 async function sendMessage(): Promise<void> {
     const message = messageInput.value.trim();
-    if (!message) return;
+    if (!message && !currentImage) return;
 
     // 检查是否为鼠标操作指令
-    if (await performMouseOperations(message)) {
+    if (message && await performMouseOperations(message)) {
         messageInput.value = '';
         return;
     }
 
     // 添加用户消息到历史记录
-    messageHistory.push({ role: 'user', content: message });
+    const userMessage: Message = {
+        role: 'user',
+        content: message,
+    };
+    
+    if (currentImage) {
+        userMessage.image = currentImage;
+    }
+    
+    messageHistory.push(userMessage);
     
     // 添加用户消息到界面
-    addMessage(message, true);
+    addMessage(message, true, currentImage);
     messageInput.value = '';
+    currentImage = null;
 
     try {
         // 发送请求到本地模型
@@ -356,10 +366,25 @@ async function sendMessage(): Promise<void> {
     }
 }
 
-function addMessage(text: string, isUser: boolean): void {
+function addMessage(text: string, isUser: boolean, image?: string | null): void {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
-    messageDiv.textContent = text;
+    
+    if (text) {
+        const textDiv = document.createElement('div');
+        textDiv.textContent = text;
+        messageDiv.appendChild(textDiv);
+    }
+    
+    if (image) {
+        const img = document.createElement('img');
+        img.src = image;
+        img.style.maxWidth = '200px';
+        img.style.borderRadius = '8px';
+        img.style.marginTop = text ? '10px' : '0';
+        messageDiv.appendChild(img);
+    }
+    
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -385,4 +410,76 @@ mousePositionButton.addEventListener('click', async () => {
 clearContextButton.addEventListener('click', clearContext);
 messageInput.addEventListener('keypress', (e: KeyboardEvent) => {
     if (e.key === 'Enter') sendMessage();
+});
+
+// 添加图片处理函数
+async function handleImageUpload(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64String = reader.result as string;
+            resolve(base64String);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}
+
+// 创建图片预览元素
+function createImagePreview(base64Image: string): HTMLElement {
+    const container = document.createElement('div');
+    container.style.position = 'relative';
+    container.style.display = 'inline-block';
+    container.style.maxWidth = '200px';
+    container.style.margin = '10px 0';
+
+    const img = document.createElement('img');
+    img.src = base64Image;
+    img.style.maxWidth = '100%';
+    img.style.borderRadius = '8px';
+
+    const removeButton = document.createElement('button');
+    removeButton.innerHTML = '×';
+    removeButton.style.position = 'absolute';
+    removeButton.style.top = '5px';
+    removeButton.style.right = '5px';
+    removeButton.style.background = 'rgba(0,0,0,0.5)';
+    removeButton.style.color = 'white';
+    removeButton.style.border = 'none';
+    removeButton.style.borderRadius = '50%';
+    removeButton.style.width = '20px';
+    removeButton.style.height = '20px';
+    removeButton.style.cursor = 'pointer';
+    removeButton.onclick = () => container.remove();
+
+    container.appendChild(img);
+    container.appendChild(removeButton);
+    return container;
+}
+
+// 添加图片上传事件处理
+uploadButton.addEventListener('click', () => {
+    imageInput.click();
+});
+
+imageInput.addEventListener('change', async (event) => {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+    
+    if (file) {
+        try {
+            const base64Image = await handleImageUpload(file);
+            currentImage = base64Image;
+            
+            // 创建预览
+            const previewContainer = createImagePreview(base64Image);
+            messageInput.parentElement?.insertBefore(previewContainer, messageInput);
+            
+            // 清除文件输入
+            target.value = '';
+        } catch (error) {
+            console.error('Error handling image upload:', error);
+            addMessage('图片上传失败，请重试。', false);
+        }
+    }
 });
