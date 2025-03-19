@@ -24,7 +24,7 @@ interface Coordinates {
 let messageHistory: Message[] = [];
 
 // 存储系统提示词
-let systemPrompt: string = `你是一个专门处理图像分析和自动化操作的AI助手。你的主要任务是：
+let systemPrompt: string = `你是一个通过图像分析进行自动化操作的AI助手。你的主要任务是：
 
 1. 分析用户上传的截图内容：
    - 识别界面元素的位置和类型（按钮、文本框、链接等）
