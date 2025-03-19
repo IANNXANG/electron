@@ -295,34 +295,72 @@ async function performMouseOperations(message: string): Promise<boolean> {
 const messageInput = document.getElementById('messageInput') as HTMLInputElement;
 const sendButton = document.getElementById('sendButton') as HTMLButtonElement;
 const imageInput = document.getElementById('imageInput') as HTMLInputElement;
-const uploadButton = document.getElementById('uploadButton') as HTMLButtonElement;
-const mousePositionButton = document.createElement('button');
-mousePositionButton.id = 'mousePositionButton';
-mousePositionButton.textContent = '显示鼠标位置';
 
-// 创建截图按钮
-const screenshotButton = document.createElement('button');
-screenshotButton.id = 'screenshotButton';
-screenshotButton.className = 'screenshot-button';
-screenshotButton.innerHTML = `
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+// 创建工具栏容器
+const toolbarDiv = document.createElement('div');
+toolbarDiv.className = 'toolbar';
+
+// 创建上传图片按钮
+const uploadButton = document.createElement('button');
+uploadButton.id = 'uploadButton';
+uploadButton.className = 'tool-button';
+uploadButton.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
         <circle cx="12" cy="12" r="3"/>
         <path d="M8 8h.01"/>
     </svg>
 `;
+uploadButton.title = '上传图片';
+
+// 创建鼠标位置按钮
+const mousePositionButton = document.createElement('button');
+mousePositionButton.id = 'mousePositionButton';
+mousePositionButton.className = 'tool-button';
+mousePositionButton.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+        <path d="M13 13l6 6"/>
+    </svg>
+`;
+mousePositionButton.title = '显示鼠标位置';
+
+// 创建截图按钮
+const screenshotButton = document.createElement('button');
+screenshotButton.id = 'screenshotButton';
+screenshotButton.className = 'tool-button';
+screenshotButton.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 19H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.5l2-2h7l2 2H21a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2z"/>
+        <circle cx="12" cy="13" r="3"/>
+    </svg>
+`;
+screenshotButton.title = '截图';
 
 // 创建清除上下文按钮
 const clearContextButton = document.createElement('button');
 clearContextButton.id = 'clearContextButton';
-clearContextButton.textContent = '清除上下文';
-clearContextButton.style.marginRight = '10px';
+clearContextButton.className = 'tool-button';
+clearContextButton.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 6h18"/>
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        <line x1="10" y1="11" x2="10" y2="17"/>
+        <line x1="14" y1="11" x2="14" y2="17"/>
+    </svg>
+`;
+clearContextButton.title = '清除上下文';
+
+// 添加按钮到工具栏
+toolbarDiv.appendChild(clearContextButton);
+toolbarDiv.appendChild(mousePositionButton);
+toolbarDiv.appendChild(screenshotButton);
+toolbarDiv.appendChild(uploadButton);
 
 const inputContainer = document.querySelector('.input-container');
 if (inputContainer) {
-    inputContainer.insertBefore(clearContextButton, inputContainer.firstChild);
-    inputContainer.insertBefore(mousePositionButton, inputContainer.firstChild);
-    inputContainer.insertBefore(screenshotButton, inputContainer.firstChild);
+    inputContainer.insertBefore(toolbarDiv, inputContainer.firstChild);
 }
 const chatMessages = document.getElementById('chatMessages') as HTMLDivElement;
 
