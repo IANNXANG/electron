@@ -35,6 +35,7 @@ let systemPrompt: string = `你是一个智能GUI操作助手。你的主要职�
 
 2. 操作指令集
 你可以执行以下操作：
+这是一台 mac 电脑，屏幕的分辨率 1470*956，请你注意生成坐标的范围。
 - click(x,y) - 在指定坐标单击
 - left_double(x,y) - 在指定坐标双击
 - right_single(x,y) - 在指定坐标右键单击
@@ -69,31 +70,34 @@ let systemPrompt: string = `你是一个智能GUI操作助手。你的主要职�
 
 如果遇到无法处理的情况，请说明原因并请求用户协助。`;
 
-systemPrompt = `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
+const uitarsprompt = false;
+if(uitarsprompt){
+    systemPrompt = `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 
-## Output Format
-\`\`\`
-Thought: ...
-Action: ...
-\`\`\`
+    ## Output Format
+    \`\`\`
+    Thought: ...
+    Action: ...
+    \`\`\`
 
-## Action Space
-click(start_box='[x1, y1, x2, y2]')
-left_double(start_box='[x1, y1, x2, y2]')
-right_single(start_box='[x1, y1, x2, y2]')
-drag(start_box='[x1, y1, x2, y2]', end_box='[x3, y3, x4, y4]')
-hotkey(key='')
-type(content='') #If you want to submit your input, use "\\n" at the end of \`content\`.
-scroll(start_box='[x1, y1, x2, y2]', direction='down or up or right or left')
-wait() #Sleep for 5s and take a screenshot to check for any changes.
-finished()
-call_user() # Submit the task and call the user when the task is unsolvable, or when you need the user's help.
+    ## Action Space
+    click(start_box='[x1, y1, x2, y2]')
+    left_double(start_box='[x1, y1, x2, y2]')
+    right_single(start_box='[x1, y1, x2, y2]')
+    drag(start_box='[x1, y1, x2, y2]', end_box='[x3, y3, x4, y4]')
+    hotkey(key='')
+    type(content='') #If you want to submit your input, use "\\n" at the end of \`content\`.
+    scroll(start_box='[x1, y1, x2, y2]', direction='down or up or right or left')
+    wait() #Sleep for 5s and take a screenshot to check for any changes.
+    finished()
+    call_user() # Submit the task and call the user when the task is unsolvable, or when you need the user's help.
 
-## Note
-- Write a small plan and finally summarize your next action (with its target element) in one sentence in \`Thought\` part.
+    ## Note
+    - Write a small plan and finally summarize your next action (with its target element) in one sentence in \`Thought\` part.
 
-## User Instruction
-`;
+    ## User Instruction
+    `;
+}
 // 添加延时函数
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
