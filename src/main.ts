@@ -141,3 +141,12 @@ ipcMain.handle('capture-screenshot', async () => {
         return null;
     }
 });
+
+// 添加IPC处理程序
+ipcMain.handle('get-screen-size', () => {
+    const primaryDisplay = screen.getPrimaryDisplay();
+    return {
+        width: primaryDisplay.size.width,
+        height: primaryDisplay.size.height
+    };
+});

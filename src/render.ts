@@ -70,7 +70,7 @@ let systemPrompt: string = `你是一个智能GUI操作助手。你的主要职�
 
 如果遇到无法处理的情况，请说明原因并请求用户协助。`;
 
-const uitarsprompt = false;
+const uitarsprompt = true;
 if(uitarsprompt){
     systemPrompt = `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 
@@ -152,10 +152,145 @@ async function executeSystemCommand(command: string): Promise<void> {
     });
 }
 
+// 添加坐标转换函数
+async function getScreenSize(): Promise<{ width: number, height: number }> {
+    const { ipcRenderer } = require('electron');
+    try {
+        const screenSize = await ipcRenderer.invoke('get-screen-size');
+        return screenSize;
+    } catch (error) {
+        console.error('获取屏幕尺寸失败:', error);
+        // 如果获取失败，返回一个默认值
+        return {
+            width: 1470,
+            height: 956
+        };
+    }
+}
+
+async function convertCoordinates(x: number, y: number): Promise<{ x: number, y: number }> {
+    const screenSize = await getScreenSize();
+    console.log('Screen size:', screenSize, 'Input coordinates:', x, y);
+    return {
+        x: Math.round(screenSize.width * x / 1000),
+        y: Math.round(screenSize.height * y / 1000)
+    };
+}
+
 // 鼠标操作函数
 async function performMouseOperations(message: string): Promise<boolean> {
     const { mouse, Button, keyboard, Key } = require('@nut-tree/nut-js');
 
+    // 匹配新格式的点击操作 - start_box格式
+    const newClickMatch = message.match(/click\(start_box='[\[\(](\d+),(\d+)[\]\)]'\)/);
+    if (newClickMatch) {
+        const normalizedX = parseInt(newClickMatch[1]);
+        const normalizedY = parseInt(newClickMatch[2]);
+        const { x, y } = await convertCoordinates(normalizedX, normalizedY);
+        await mouse.setPosition({x, y});
+        await mouse.leftClick();
+        addMessage(`已执行左键单击：(${x}, ${y}) [标准化坐标: (${normalizedX}, ${normalizedY})]`, true);
+        return true;
+    }
+
+    // 匹配新格式的双击操作 - start_box格式
+    const newDoubleClickMatch = message.match(/left_double\(start_box='[\[\(](\d+),(\d+)[\]\)]'\)/);
+    if (newDoubleClickMatch) {
+        const normalizedX = parseInt(newDoubleClickMatch[1]);
+        const normalizedY = parseInt(newDoubleClickMatch[2]);
+        const { x, y } = await convertCoordinates(normalizedX, normalizedY);
+        await mouse.setPosition({x, y});
+        await mouse.doubleClick(Button.LEFT);
+        addMessage(`已执行左键双击：(${x}, ${y}) [标准化坐标: (${normalizedX}, ${normalizedY})]`, true);
+        return true;
+    }
+
+    // 匹配新格式的右键单击操作 - start_box格式
+    const newRightClickMatch = message.match(/right_single\(start_box='[\[\(](\d+),(\d+)[\]\)]'\)/);
+    if (newRightClickMatch) {
+        const normalizedX = parseInt(newRightClickMatch[1]);
+        const normalizedY = parseInt(newRightClickMatch[2]);
+        const { x, y } = await convertCoordinates(normalizedX, normalizedY);
+        await mouse.setPosition({x, y});
+        await mouse.rightClick();
+        addMessage(`已执行右键单击：(${x}, ${y}) [标准化坐标: (${normalizedX}, ${normalizedY})]`, true);
+        return true;
+    }
+
+    // 匹配新格式的拖拽操作 - start_box和end_box格式
+    const newDragMatch = message.match(/drag\(start_box='[\[\(](\d+),(\d+)[\]\)]',\s*end_box='[\[\(](\d+),(\d+)[\]\)]'\)/);
+    if (newDragMatch) {
+        const normalizedX1 = parseInt(newDragMatch[1]);
+        const normalizedY1 = parseInt(newDragMatch[2]);
+        const normalizedX2 = parseInt(newDragMatch[3]);
+        const normalizedY2 = parseInt(newDragMatch[4]);
+        
+        const start = await convertCoordinates(normalizedX1, normalizedY1);
+        const end = await convertCoordinates(normalizedX2, normalizedY2);
+        
+        try {
+            await mouse.setPosition(start);
+            await sleep(100);
+            await mouse.pressButton(Button.LEFT);
+            await sleep(100);
+            await smoothMove(start, end);
+            await sleep(100);
+            await mouse.releaseButton(Button.LEFT);
+            addMessage(`已执行拖拽：从 (${start.x}, ${start.y}) 到 (${end.x}, ${end.y}) [标准化坐标: (${normalizedX1}, ${normalizedY1}) -> (${normalizedX2}, ${normalizedY2})]`, true);
+            return true;
+        } catch (error) {
+            console.error('拖拽操作失败:', error);
+            addMessage(`拖拽操作失败：从 (${start.x}, ${start.y}) 到 (${end.x}, ${end.y})`, true);
+            return true;
+        }
+    }
+
+    // 匹配新格式的滚动操作 - start_box格式
+    const newScrollMatch = message.match(/scroll\(start_box='[\[\(](\d+),(\d+)[\]\)]',\s*direction='(up|down|left|right)'\)/);
+    if (newScrollMatch) {
+        const normalizedX = parseInt(newScrollMatch[1]);
+        const normalizedY = parseInt(newScrollMatch[2]);
+        const { x, y } = await convertCoordinates(normalizedX, normalizedY);
+        const direction = newScrollMatch[3];
+        
+        try {
+            await mouse.setPosition({x, y});
+            await sleep(200);
+            const totalScrollAmount = 500;
+            const scrollSteps = 20;
+            for (let i = 0; i < 2; i++) {
+                await smoothScroll(direction, totalScrollAmount, scrollSteps);
+                await sleep(30);
+            }
+            addMessage(`已在位置(${x}, ${y})执行${direction}方向平滑滚动 [标准化坐标: (${normalizedX}, ${normalizedY})]`, true);
+            return true;
+        } catch (error) {
+            console.error('滚动操作失败:', error);
+            addMessage(`滚动操作失败：在位置(${x}, ${y})`, true);
+            return true;
+        }
+    }
+
+    // 匹配等待操作
+    if (message.includes('wait()')) {
+        await sleep(5000);
+        addMessage('已等待5秒', true);
+        return true;
+    }
+
+    // 匹配完成操作
+    if (message.includes('finished()')) {
+        addMessage('任务已完成', true);
+        return true;
+    }
+
+    // 匹配调用用户操作
+    if (message.includes('call_user()')) {
+        addMessage('需要用户协助，请提供帮助', true);
+        return true;
+    }
+
+    // 匹配旧格式的操作（保持向后兼容）
     // 匹配点击操作
     const clickMatch = message.match(/click\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
     if (clickMatch) {
@@ -412,91 +547,121 @@ async function sendMessage(): Promise<void> {
     const message = messageInput.value.trim();
     if (!message && !currentImage) return;
 
-    // 检查是否为鼠标操作指令
-    if (message && await performMouseOperations(message)) {
-        messageInput.value = '';
-        return;
-    }
-
-    // 添加用户消息到历史记录
-    const userMessage: Message = {
-        role: 'user',
-        content: message || '请分析这张图片',
-    };
-    
-    if (currentImage) {
-        userMessage.image = currentImage;
-    }
-    
-    messageHistory.push(userMessage);
-    
-    // 添加用户消息到界面
-    addMessage(message, true, currentImage);
-    messageInput.value = '';
-    currentImage = null;
-
     try {
-        // 发送请求到本地模型
-        const response = await fetch('http://localhost:8001/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                messages: [
-                    { 
-                        role: 'system', 
-                        content: systemPrompt,
-                        name: 'system'
-                    },
-                    ...messageHistory.map(msg => {
-                        // 构建消息对象
-                        const msgObj: any = {
-                            role: msg.role,
-                            name: msg.role === 'user' ? 'user' : 'assistant',
-                            content: msg.content
-                        };
-                        
-                        // 如果有图片，添加到content中
-                        if (msg.image) {
-                            msgObj.content = [
-                                {
-                                    type: "text",
-                                    text: msg.content || "请分析这张图片"
-                                },
-                                {
-                                    type: "image_url",
-                                    image_url: {
-                                        url: msg.image
+        // 检查是否为鼠标操作指令
+        if (message) {
+            console.log('尝试执行操作:', message);
+            try {
+                const result = await performMouseOperations(message);
+                if (result) {
+                    messageInput.value = '';
+                    return;
+                }
+            } catch (error: any) {
+                console.error('执行鼠标操作时发生错误:', error);
+                addMessage(`执行操作失败: ${error?.message || '未知错误'}`, false);
+                return;
+            }
+        }
+
+        // 添加用户消息到历史记录
+        const userMessage: Message = {
+            role: 'user',
+            content: message || '请分析这张图片',
+        };
+        
+        if (currentImage) {
+            userMessage.image = currentImage;
+        }
+        
+        messageHistory.push(userMessage);
+        
+        // 添加用户消息到界面
+        addMessage(message, true, currentImage);
+        messageInput.value = '';
+        currentImage = null;
+
+        try {
+            console.log('发送请求到本地模型...');
+            // 发送请求到本地模型
+            const response = await fetch('http://localhost:8001/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    messages: [
+                        { 
+                            role: 'system', 
+                            content: systemPrompt,
+                            name: 'system'
+                        },
+                        ...messageHistory.map(msg => {
+                            const msgObj: any = {
+                                role: msg.role,
+                                name: msg.role === 'user' ? 'user' : 'assistant',
+                                content: msg.content
+                            };
+                            
+                            if (msg.image) {
+                                msgObj.content = [
+                                    {
+                                        type: "text",
+                                        text: msg.content || "请分析这张图片"
+                                    },
+                                    {
+                                        type: "image_url",
+                                        image_url: {
+                                            url: msg.image
+                                        }
                                     }
-                                }
-                            ];
-                        }
-                        
-                        return msgObj;
-                    })
-                ],
-                model: 'ui-tars',
-                temperature: 0,
-                max_tokens: 2000,
-                stream: false
-            })
-        });
+                                ];
+                            }
+                            
+                            return msgObj;
+                        })
+                    ],
+                    model: 'ui-tars',
+                    temperature: 0,
+                    max_tokens: 2000,
+                    stream: false
+                })
+            });
 
-        const data: ApiResponse = await response.json();
-        const botResponse = data.choices[0].message.content;
-        
-        // 将AI回复添加到对话历史
-        messageHistory.push({ role: 'assistant', content: botResponse });
-        
-        // 添加机器人响应到界面
-        addMessage(botResponse, false);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
-        // 检查AI回复中是否包含鼠标操作指令
-        await performMouseOperations(botResponse);
-    } catch (error) {
-        console.error('Error:', error);
-        addMessage('抱歉，发生了一些错误，请稍后再试。', false);
+            const data: ApiResponse = await response.json();
+            console.log('收到模型响应:', data);
+            
+            if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+                throw new Error('模型响应格式不正确');
+            }
+
+            const botResponse = data.choices[0].message.content;
+            
+            // 将AI回复添加到对话历史
+            messageHistory.push({ role: 'assistant', content: botResponse });
+            
+            // 添加机器人响应到界面
+            addMessage(botResponse, false);
+
+            // 检查AI回复中是否包含鼠标操作指令
+            console.log('尝试执行AI响应中的操作...');
+            try {
+                await performMouseOperations(botResponse);
+            } catch (error: any) {
+                console.error('执行AI响应操作时发生错误:', error);
+                addMessage(`执行AI响应操作失败: ${error?.message || '未知错误'}`, false);
+            }
+        } catch (error: any) {
+            console.error('与模型通信时发生错误:', error);
+            addMessage(`发生错误: ${error?.message || '未知错误'}。请检查模型服务是否正常运行。`, false);
+        }
+    } catch (error: any) {
+        console.error('整体操作发生错误:', error);
+        addMessage(`操作失败: ${error?.message || '未知错误'}`, false);
     }
 }
 
