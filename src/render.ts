@@ -528,11 +528,23 @@ clearContextButton.innerHTML = `
 `;
 clearContextButton.title = '清除上下文';
 
+// 创建自动执行按钮
+const autoExecuteButton = document.createElement('button');
+autoExecuteButton.id = 'autoExecuteButton';
+autoExecuteButton.className = 'tool-button';
+autoExecuteButton.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M5 3l14 9-14 9V3z"/>
+    </svg>
+`;
+autoExecuteButton.title = '自动执行';
+
 // 添加按钮到工具栏
 toolbarDiv.appendChild(clearContextButton);
 toolbarDiv.appendChild(mousePositionButton);
 toolbarDiv.appendChild(screenshotButton);
 toolbarDiv.appendChild(uploadButton);
+toolbarDiv.appendChild(autoExecuteButton);
 
 const inputContainer = document.querySelector('.input-container');
 if (inputContainer) {
@@ -867,3 +879,120 @@ async function captureScreenshot(): Promise<void> {
         addMessage('截图失败，请重试。', false);
     }
 }
+
+// 添加自动执行逻辑
+async function autoExecute(): Promise<void> {
+    const message = messageInput.value.trim();
+    if (!message) {
+        addMessage('请先输入指令', false);
+        return;
+    }
+
+    try {
+        const { ipcRenderer } = require('electron');
+        let currentMessage = message;
+        let isFinished = false;
+
+        while (!isFinished) {
+            console.log('开始自动执行循环...');
+            
+            // 1. 先截取当前屏幕
+            const screenshotData = await ipcRenderer.invoke('capture-screenshot');
+            if (!screenshotData) {
+                throw new Error('截图失败');
+            }
+            
+            // 2. 发送消息和截图到模型
+            const userMessage: Message = {
+                role: 'user',
+                content: currentMessage,
+                image: screenshotData.screenshot
+            };
+            
+            messageHistory.push(userMessage);
+            addMessage(currentMessage, true, screenshotData.screenshot);
+            
+            // 3. 调用模型获取响应
+            console.log('发送请求到本地模型...');
+            const response = await fetch('http://localhost:8001/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    messages: [
+                        { 
+                            role: 'system', 
+                            content: systemPrompt,
+                            name: 'system'
+                        },
+                        ...messageHistory.map(msg => {
+                            const msgObj: any = {
+                                role: msg.role,
+                                name: msg.role === 'user' ? 'user' : 'assistant',
+                                content: msg.content
+                            };
+                            
+                            if (msg.image) {
+                                msgObj.content = [
+                                    {
+                                        type: "text",
+                                        text: msg.content || "请分析这张图片"
+                                    },
+                                    {
+                                        type: "image_url",
+                                        image_url: {
+                                            url: msg.image
+                                        }
+                                    }
+                                ];
+                            }
+                            
+                            return msgObj;
+                        })
+                    ],
+                    model: 'ui-tars',
+                    temperature: 0,
+                    max_tokens: 2000,
+                    stream: false
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data: ApiResponse = await response.json();
+            console.log('收到模型响应:', data);
+            
+            if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+                throw new Error('模型响应格式不正确');
+            }
+
+            const botResponse = data.choices[0].message.content;
+            messageHistory.push({ role: 'assistant', content: botResponse });
+            addMessage(botResponse, false);
+
+            // 4. 执行模型返回的操作
+            console.log('执行模型返回的操作:', botResponse);
+            await performMouseOperations(botResponse);
+
+            // 5. 检查是否需要结束循环
+            if (botResponse.includes('finished()') || botResponse.includes('call_user()')) {
+                isFinished = true;
+                addMessage('自动执行完成', false);
+            } else {
+                // 等待一小段时间让界面更新
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                // 更新当前消息为"继续"
+                currentMessage = "继续";
+            }
+        }
+    } catch (error: any) {
+        console.error('自动执行过程中发生错误:', error);
+        addMessage(`自动执行失败: ${error?.message || '未知错误'}`, false);
+    }
+}
+
+// 添加按钮事件监听器
+autoExecuteButton.addEventListener('click', autoExecute);
