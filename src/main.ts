@@ -28,7 +28,9 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false
-        }
+        },
+        transparent: true,
+        backgroundColor: '#ffffff'
     });
 
     mainWindow.loadFile(path.join(__dirname, '../src/index.html'));
@@ -103,41 +105,52 @@ ipcMain.on('close-mouse-position-window', () => {
 // 添加截图功能
 ipcMain.handle('capture-screenshot', async () => {
     try {
-        // 隐藏主窗口
-        mainWindow?.hide();
+        // 临时将窗口设为透明
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            const originalOpacity = mainWindow.getOpacity();
+            mainWindow.setOpacity(0);
+            
+            // 等待一小段时间确保透明度生效
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // 获取主显示器
+            const primaryDisplay = screen.getPrimaryDisplay();
+            const { width, height } = primaryDisplay.size;
+            
+            // 获取所有屏幕源
+            const sources = await desktopCapturer.getSources({
+                types: ['screen'],
+                thumbnailSize: {
+                    width,
+                    height
+                }
+            });
+
+            // 找到主显示器的源（如果找不到就使用第一个源）
+            const primarySource = sources[0];
+
+            // 获取截图
+            const screenshot = primarySource.thumbnail.toDataURL();
+            
+            // 恢复窗口原来的不透明度
+            mainWindow.setOpacity(originalOpacity);
+            
+            return {
+                screenshot,
+                resolution: {
+                    width,
+                    height
+                }
+            };
+        }
         
-        // 等待一小段时间确保窗口完全隐藏
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // 获取主显示器
-        const primaryDisplay = screen.getPrimaryDisplay();
-        const { width, height } = primaryDisplay.size;
-        
-        // 捕获屏幕
-        const sources = await desktopCapturer.getSources({
-            types: ['screen'],
-            thumbnailSize: {
-                width,
-                height
-            }
-        });
-        
-        // 获取截图
-        const screenshot = sources[0].thumbnail.toDataURL();
-        
-        // 显示主窗口
-        mainWindow?.show();
-        
-        return {
-            screenshot,
-            resolution: {
-                width,
-                height
-            }
-        };
+        throw new Error('主窗口不可用');
     } catch (error) {
         console.error('Screenshot error:', error);
-        mainWindow?.show();
+        // 确保在出错时也恢复窗口不透明度
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.setOpacity(1);
+        }
         return null;
     }
 });
@@ -149,4 +162,21 @@ ipcMain.handle('get-screen-size', () => {
         width: primaryDisplay.size.width,
         height: primaryDisplay.size.height
     };
+});
+
+// 添加窗口控制处理程序
+ipcMain.handle('minimize-window', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.minimize();
+    }
+});
+
+ipcMain.handle('restore-window', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+        }
+        mainWindow.show();
+        mainWindow.focus();
+    }
 });

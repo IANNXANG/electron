@@ -888,8 +888,18 @@ async function autoExecute(): Promise<void> {
         return;
     }
 
+    const { ipcRenderer } = require('electron');
+    console.log('开始自动执行任务...');
+
+    // 禁用所有输入和按钮
+    const inputs = document.querySelectorAll('input, button') as NodeListOf<HTMLElement>;
+    inputs.forEach(input => input.style.pointerEvents = 'none');
+
     try {
-        const { ipcRenderer } = require('electron');
+        // 最小化窗口
+        await ipcRenderer.invoke('minimize-window');
+        await sleep(500); // 等待窗口最小化完成
+        
         let currentMessage = message;
         let isFinished = false;
 
@@ -897,6 +907,7 @@ async function autoExecute(): Promise<void> {
             console.log('开始自动执行循环...');
             
             // 1. 先截取当前屏幕
+            console.log('正在截取屏幕...');
             const screenshotData = await ipcRenderer.invoke('capture-screenshot');
             if (!screenshotData) {
                 throw new Error('截图失败');
@@ -910,7 +921,6 @@ async function autoExecute(): Promise<void> {
             };
             
             messageHistory.push(userMessage);
-            addMessage(currentMessage, true, screenshotData.screenshot);
             
             // 3. 调用模型获取响应
             console.log('发送请求到本地模型...');
@@ -971,7 +981,6 @@ async function autoExecute(): Promise<void> {
 
             const botResponse = data.choices[0].message.content;
             messageHistory.push({ role: 'assistant', content: botResponse });
-            addMessage(botResponse, false);
 
             // 4. 执行模型返回的操作
             console.log('执行模型返回的操作:', botResponse);
@@ -980,17 +989,39 @@ async function autoExecute(): Promise<void> {
             // 5. 检查是否需要结束循环
             if (botResponse.includes('finished()') || botResponse.includes('call_user()')) {
                 isFinished = true;
-                addMessage('自动执行完成', false);
             } else {
-                // 等待一小段时间让界面更新
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // 等待一小段时间让操作完成
+                await sleep(1000);
                 // 更新当前消息为"继续"
                 currentMessage = "继续";
             }
         }
     } catch (error: any) {
         console.error('自动执行过程中发生错误:', error);
-        addMessage(`自动执行失败: ${error?.message || '未知错误'}`, false);
+        messageHistory.push({ 
+            role: 'assistant', 
+            content: `自动执行失败: ${error?.message || '未知错误'}` 
+        });
+    } finally {
+        // 恢复窗口
+        await ipcRenderer.invoke('restore-window');
+        await sleep(500); // 等待窗口恢复完成
+        
+        // 恢复输入和按钮的可用状态
+        inputs.forEach(input => input.style.pointerEvents = 'auto');
+        
+        // 更新界面显示所有消息历史
+        console.log('更新消息历史...');
+        chatMessages.innerHTML = '';
+        messageHistory.forEach(msg => {
+            if (msg.role === 'user' || msg.role === 'assistant') {
+                addMessage(msg.content, msg.role === 'user', msg.image);
+            }
+        });
+        
+        // 清空输入框
+        messageInput.value = '';
+        console.log('自动执行任务结束');
     }
 }
 
