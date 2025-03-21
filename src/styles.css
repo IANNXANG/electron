@@ -5,7 +5,7 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background-color: transparent;
+    background-color: #ffffff;
 }
 
 .chat-container {
@@ -15,10 +15,8 @@ body {
     max-width: 1200px;
     margin: 0 auto;
     width: 100%;
-    background: rgba(255, 255, 255, 0.95);
+    background: #ffffff;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
 }
 
 .chat-header {

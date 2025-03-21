@@ -29,7 +29,8 @@ function createWindow() {
             nodeIntegration: true,
             contextIsolation: false
         },
-        transparent: true,
+        frame: true,
+        transparent: false,
         backgroundColor: '#ffffff'
     });
 
