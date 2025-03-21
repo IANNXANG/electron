@@ -992,8 +992,8 @@ async function autoExecute(): Promise<void> {
             } else {
                 // 等待一小段时间让操作完成
                 await sleep(1000);
-                // 更新当前消息为"继续"
-                currentMessage = "继续";
+                // 更新当前消息为"动作已执行完毕，这里是新的屏幕截图，请继续"
+                currentMessage = "动作已执行完毕，这里是新的屏幕截图，请继续";
             }
         }
     } catch (error: any) {
