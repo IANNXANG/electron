@@ -26,7 +26,7 @@ let messageHistory: Message[] = [];
 // 存储系统提示词
 let systemPrompt: string = ''
 
-const uitarsprompt: number = 1;
+const uitarsprompt: number = 3;
 if(uitarsprompt === 1){
 systemPrompt = `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 
@@ -100,7 +100,29 @@ systemPrompt = `你是一个智能GUI操作助手。你的主要职责是分析�
 
 如果遇到无法处理的情况，请说明原因并请求用户协助。`;
 }else if(uitarsprompt === 3){
-systemPrompt = ''
+systemPrompt = `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
+
+## Output Format
+\`\`\`
+Thought: ...
+Action: ...
+\`\`\`
+
+## Action Space
+click(start_box='(x, y)')
+left_double(start_box='(x, y)')
+right_single(start_box='(x, y)')
+drag(start_box='(x, y)', end_box='(x, y)')
+hotkey(key='')
+type(content='') #If you want to submit your input, use "\\n" at the end of \`content\`.
+scroll(start_box='(x, y)', direction='down or up or right or left')
+wait() #Sleep for 5s and take a screenshot to check for any changes.
+finished()
+call_user() # Submit the task and call the user when the task is unsolvable, or when you need the user's help.
+
+## Note
+- Write a small plan and finally summarize your next action (with its target element) in one sentence in \`Thought\` part.
+`
 }
 // 添加延时函数
 function sleep(ms: number): Promise<void> {
