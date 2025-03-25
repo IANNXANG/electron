@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, systemPreferences, screen, desktopCapturer } from 'electron';
+import { app, BrowserWindow, ipcMain, systemPreferences, screen, desktopCapturer, globalShortcut } from 'electron';
 import * as path from 'path';
 
 async function requestScreenAccess() {
@@ -180,4 +180,34 @@ ipcMain.handle('restore-window', () => {
         mainWindow.show();
         mainWindow.focus();
     }
+});
+
+// 添加快捷键处理程序
+ipcMain.handle('register-stop-shortcut', () => {
+    try {
+        // 注册 Control+B 快捷键
+        globalShortcut.register('CommandOrControl+B', () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('stop-auto-execute');
+            }
+        });
+        console.log('快捷键注册成功');
+    } catch (error) {
+        console.error('快捷键注册失败:', error);
+    }
+});
+
+ipcMain.handle('unregister-stop-shortcut', () => {
+    try {
+        // 注销 Control+B 快捷键
+        globalShortcut.unregister('CommandOrControl+B');
+        console.log('快捷键注销成功');
+    } catch (error) {
+        console.error('快捷键注销失败:', error);
+    }
+});
+
+// 确保在应用退出时注销所有快捷键
+app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
 });

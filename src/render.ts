@@ -581,6 +581,21 @@ const chatMessages = document.getElementById('chatMessages') as HTMLDivElement;
 // 当前上传的图片
 let currentImage: string | null = null;
 
+// 添加自动执行状态跟踪
+let isAutoExecuting = false;
+
+// 获取 ipcRenderer
+const { ipcRenderer } = require('electron');
+
+// 注册快捷键监听
+ipcRenderer.on('stop-auto-execute', () => {
+    if (isAutoExecuting) {
+        isAutoExecuting = false;
+        console.log('用户通过快捷键终止了自动执行');
+        addMessage('自动执行已被用户终止', false);
+    }
+});
+
 async function sendMessage(): Promise<void> {
     const message = messageInput.value.trim();
     if (!message && !currentImage) return;
@@ -914,8 +929,13 @@ async function autoExecute(): Promise<void> {
         return;
     }
 
-    const { ipcRenderer } = require('electron');
     console.log('开始自动执行任务...');
+
+    // 设置自动执行状态
+    isAutoExecuting = true;
+
+    // 注册全局快捷键
+    await ipcRenderer.invoke('register-stop-shortcut');
 
     // 禁用所有输入和按钮
     const inputs = document.querySelectorAll('input, button') as NodeListOf<HTMLElement>;
@@ -929,7 +949,7 @@ async function autoExecute(): Promise<void> {
         let currentMessage = message;
         let isFinished = false;
 
-        while (!isFinished) {
+        while (!isFinished && isAutoExecuting) {  // 添加 isAutoExecuting 检查
             console.log('开始自动执行循环...');
             
             // 1. 先截取当前屏幕
@@ -948,6 +968,11 @@ async function autoExecute(): Promise<void> {
             
             messageHistory.push(userMessage);
             
+            // 检查是否被终止
+            if (!isAutoExecuting) {
+                throw new Error('用户终止了自动执行');
+            }
+
             // 3. 调用模型获取响应
             console.log('发送请求到本地模型...');
             const response = await fetch('http://localhost:8001/v1/chat/completions', {
@@ -1026,9 +1051,15 @@ async function autoExecute(): Promise<void> {
         console.error('自动执行过程中发生错误:', error);
         messageHistory.push({ 
             role: 'assistant', 
-            content: `自动执行失败: ${error?.message || '未知错误'}` 
+            content: `自动执行${error.message === '用户终止了自动执行' ? '已被用户终止' : '失败: ' + (error?.message || '未知错误')}` 
         });
     } finally {
+        // 重置自动执行状态
+        isAutoExecuting = false;
+        
+        // 注销全局快捷键
+        await ipcRenderer.invoke('unregister-stop-shortcut');
+        
         // 恢复窗口
         await ipcRenderer.invoke('restore-window');
         await sleep(500); // 等待窗口恢复完成
