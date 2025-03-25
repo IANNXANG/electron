@@ -417,7 +417,7 @@ async function performMouseOperations(message: string): Promise<boolean> {
             if (keys.includes('control')) modifiers.push(Key.LeftControl);
             if (keys.includes('shift')) modifiers.push(Key.LeftShift);
             
-            // 获取主键（最后一个键）
+            // 获取主键（最后一个键）第一个字符变成大写。
             const mainKey = keys[keys.length - 1];
             const keyToPress = Key[mainKey.charAt(0).toUpperCase() + mainKey.slice(1)] || mainKey;
 
