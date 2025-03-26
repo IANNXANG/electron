@@ -1081,7 +1081,7 @@ async function autoExecute(): Promise<void> {
                     ],
                     model: 'ui-tars',
                     temperature: 0,
-                    max_tokens: 2000,
+                    max_tokens: 128000,
                     stream: false
                 })
             });
