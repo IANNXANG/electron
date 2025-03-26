@@ -26,7 +26,12 @@ let messageHistory: Message[] = [];
 // 存储系统提示词
 let systemPrompt: string = ''
 
-const uitarsprompt: number = 3;
+// 选择提示词，四个提示词的作用分别是：
+// 1. 原始UI-tars
+// 2. 中文
+// 3. 魔改UI-tars
+// 4. 空白
+const uitarsprompt: number = 4;
 if(uitarsprompt === 1){
 systemPrompt = `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 
@@ -123,6 +128,8 @@ call_user() # Submit the task and call the user when the task is unsolvable, or 
 ## Note
 - Write a small plan and finally summarize your next action (with its target element) in one sentence in \`Thought\` part.
 `
+}else if(uitarsprompt === 4){
+    systemPrompt = ''
 }
 // 添加延时函数
 function sleep(ms: number): Promise<void> {
