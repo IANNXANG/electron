@@ -624,6 +624,32 @@ async function sendMessage(): Promise<void> {
             }
         }
 
+        // 创建对话记录文件夹
+        const desktopPath = require('os').homedir() + '/Desktop';
+        const conversationFolder = `${desktopPath}/model_conversations`;
+        if (!require('fs').existsSync(conversationFolder)) {
+            require('fs').mkdirSync(conversationFolder, { recursive: true });
+        }
+
+        // 创建新的对话记录文件夹（使用时间戳）
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const conversationPath = `${conversationFolder}/conversation_${timestamp}`;
+        require('fs').mkdirSync(conversationPath, { recursive: true });
+
+        // 如果有图片，保存到对话记录文件夹
+        if (currentImage) {
+            try {
+                const base64Data = currentImage.replace(/^data:image\/\w+;base64,/, '');
+                const buffer = Buffer.from(base64Data, 'base64');
+                const imagePath = `${conversationPath}/image_${timestamp}.png`;
+                require('fs').writeFileSync(imagePath, buffer);
+                addMessage(`图片已保存到: ${imagePath}`, false);
+            } catch (error) {
+                console.error('保存图片失败:', error);
+                addMessage('保存图片失败，但将继续处理消息', false);
+            }
+        }
+
         // 添加用户消息到历史记录
         const userMessage: Message = {
             role: 'user',
@@ -706,6 +732,28 @@ async function sendMessage(): Promise<void> {
             
             // 添加机器人响应到界面
             addMessage(botResponse, false);
+
+            // 保存对话记录
+            const conversationLog = {
+                timestamp: new Date().toISOString(),
+                systemPrompt: systemPrompt,
+                messages: messageHistory.map(msg => ({
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: new Date().toISOString(),
+                    image: msg.image ? {
+                        path: `${conversationPath}/image_${timestamp}.png`,
+                        resolution: msg.image ? {
+                            width: 1470,
+                            height: 956
+                        } : undefined
+                    } : undefined
+                }))
+            };
+
+            // 将对话记录保存为JSON文件
+            const logPath = `${conversationPath}/conversation_log.json`;
+            require('fs').writeFileSync(logPath, JSON.stringify(conversationLog, null, 2));
 
             // 检查AI回复中是否包含鼠标操作指令
             console.log('尝试执行AI响应中的操作...');
