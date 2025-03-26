@@ -665,6 +665,13 @@ async function sendMessage(): Promise<void> {
         // 添加用户消息到界面
         addMessage(message, true, currentImage);
         messageInput.value = '';
+        
+        // 删除预览图片
+        const previewContainers = document.querySelectorAll('.image-preview-container');
+        previewContainers.forEach(container => {
+            container.remove();
+        });
+        
         currentImage = null;
 
         try {
@@ -886,6 +893,7 @@ async function handleImageUpload(file: File): Promise<{ base64String: string; re
 // 创建图片预览元素
 function createImagePreview(base64Image: string, resolution?: { width: number; height: number }): HTMLElement {
     const container = document.createElement('div');
+    container.className = 'image-preview-container';
     container.style.position = 'relative';
     container.style.display = 'inline-block';
     container.style.maxWidth = '200px';
@@ -908,7 +916,11 @@ function createImagePreview(base64Image: string, resolution?: { width: number; h
     removeButton.style.width = '20px';
     removeButton.style.height = '20px';
     removeButton.style.cursor = 'pointer';
-    removeButton.onclick = () => container.remove();
+    removeButton.onclick = () => {
+        container.remove();
+        // 清空当前图片变量，防止发送
+        currentImage = null;
+    };
 
     container.appendChild(img);
     container.appendChild(removeButton);
