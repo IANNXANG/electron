@@ -20,6 +20,9 @@ interface Coordinates {
     y: number;
 }
 
+// 控制模型最大token数
+const MAX_TOKENS: number = 30000;
+
 // 存储对话历史
 let messageHistory: Message[] = [];
 
@@ -31,7 +34,7 @@ let systemPrompt: string = ''
 // 2. 中文
 // 3. 魔改UI-tars
 // 4. 空白
-const uitarsprompt: number = 4;
+const uitarsprompt: number = 3;
 if(uitarsprompt === 1){
 systemPrompt = `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 
@@ -131,6 +134,71 @@ call_user() # Submit the task and call the user when the task is unsolvable, or 
 }else if(uitarsprompt === 4){
     systemPrompt = ''
 }
+
+/**
+ * 调用模型API获取响应
+ * @param messages 消息历史
+ * @param maxTokens 最大token数
+ * @returns 模型响应
+ */
+async function callModelAPI(messages: Message[], maxTokens: number = MAX_TOKENS): Promise<string> {
+    const response = await fetch('http://localhost:8001/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            messages: [
+                { 
+                    role: 'system', 
+                    content: systemPrompt,
+                    name: 'system'
+                },
+                ...messages.map(msg => {
+                    const msgObj: any = {
+                        role: msg.role,
+                        name: msg.role === 'user' ? 'user' : 'assistant',
+                        content: msg.content
+                    };
+                    
+                    if (msg.image) {
+                        msgObj.content = [
+                            {
+                                type: "text",
+                                text: msg.content || "请分析这张图片"
+                            },
+                            {
+                                type: "image_url",
+                                image_url: {
+                                    url: msg.image
+                                }
+                            }
+                        ];
+                    }
+                    
+                    return msgObj;
+                })
+            ],
+            model: 'ui-tars',
+            temperature: 0,
+            max_tokens: maxTokens,
+            stream: false
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data: ApiResponse = await response.json();
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error('模型响应格式不正确');
+    }
+
+    return data.choices[0].message.content;
+}
+
 // 添加延时函数
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -624,25 +692,14 @@ async function sendMessage(): Promise<void> {
             }
         }
 
-        // 创建对话记录文件夹
-        const desktopPath = require('os').homedir() + '/Desktop';
-        const conversationFolder = `${desktopPath}/model_conversations`;
-        if (!require('fs').existsSync(conversationFolder)) {
-            require('fs').mkdirSync(conversationFolder, { recursive: true });
-        }
-
-        // 创建新的对话记录文件夹（使用时间戳）
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const conversationPath = `${conversationFolder}/conversation_${timestamp}`;
-        require('fs').mkdirSync(conversationPath, { recursive: true });
+        // 创建对话记录目录
+        const { conversationPath, timestamp } = createConversationDirectory();
 
         // 如果有图片，保存到对话记录文件夹
         if (currentImage) {
             try {
-                const base64Data = currentImage.replace(/^data:image\/\w+;base64,/, '');
-                const buffer = Buffer.from(base64Data, 'base64');
                 const imagePath = `${conversationPath}/image_${timestamp}.png`;
-                require('fs').writeFileSync(imagePath, buffer);
+                await saveBase64Image(currentImage, imagePath);
                 addMessage(`图片已保存到: ${imagePath}`, false);
             } catch (error) {
                 console.error('保存图片失败:', error);
@@ -676,63 +733,9 @@ async function sendMessage(): Promise<void> {
 
         try {
             console.log('发送请求到本地模型...');
-            // 发送请求到本地模型
-            const response = await fetch('http://localhost:8001/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    messages: [
-                        { 
-                            role: 'system', 
-                            content: systemPrompt,
-                            name: 'system'
-                        },
-                        ...messageHistory.map(msg => {
-                            const msgObj: any = {
-                                role: msg.role,
-                                name: msg.role === 'user' ? 'user' : 'assistant',
-                                content: msg.content
-                            };
-                            
-                            if (msg.image) {
-                                msgObj.content = [
-                                    {
-                                        type: "text",
-                                        text: msg.content || "请分析这张图片"
-                                    },
-                                    {
-                                        type: "image_url",
-                                        image_url: {
-                                            url: msg.image
-                                        }
-                                    }
-                                ];
-                            }
-                            
-                            return msgObj;
-                        })
-                    ],
-                    model: 'ui-tars',
-                    temperature: 0,
-                    max_tokens: 2000,
-                    stream: false
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data: ApiResponse = await response.json();
-            console.log('收到模型响应:', data);
             
-            if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-                throw new Error('模型响应格式不正确');
-            }
-
-            const botResponse = data.choices[0].message.content;
+            // 使用新创建的API调用函数
+            const botResponse = await callModelAPI(messageHistory);
             
             // 将AI回复添加到对话历史
             messageHistory.push({ role: 'assistant', content: botResponse });
@@ -741,26 +744,7 @@ async function sendMessage(): Promise<void> {
             addMessage(botResponse, false);
 
             // 保存对话记录
-            const conversationLog = {
-                timestamp: new Date().toISOString(),
-                systemPrompt: systemPrompt,
-                messages: messageHistory.map(msg => ({
-                    role: msg.role,
-                    content: msg.content,
-                    timestamp: new Date().toISOString(),
-                    image: msg.image ? {
-                        path: `${conversationPath}/image_${timestamp}.png`,
-                        resolution: msg.image ? {
-                            width: 1470,
-                            height: 956
-                        } : undefined
-                    } : undefined
-                }))
-            };
-
-            // 将对话记录保存为JSON文件
-            const logPath = `${conversationPath}/conversation_log.json`;
-            require('fs').writeFileSync(logPath, JSON.stringify(conversationLog, null, 2));
+            await saveConversationLog(conversationPath, timestamp);
 
             // 检查AI回复中是否包含鼠标操作指令
             console.log('尝试执行AI响应中的操作...');
@@ -865,7 +849,27 @@ messageInput.addEventListener('keypress', (e: KeyboardEvent) => {
 // 添加截图按钮事件监听
 screenshotButton.addEventListener('click', captureScreenshot);
 
-// 添加图片处理函数
+/**
+ * 保存Base64格式的图片到文件
+ * @param base64Image Base64格式的图片数据
+ * @param imagePath 保存路径
+ */
+async function saveBase64Image(base64Image: string, imagePath: string): Promise<void> {
+    try {
+        const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        require('fs').writeFileSync(imagePath, buffer);
+    } catch (error) {
+        console.error('保存图片失败:', error);
+        throw error;
+    }
+}
+
+/**
+ * 处理图片上传
+ * @param file 上传的文件
+ * @returns 包含Base64字符串和分辨率的对象
+ */
 async function handleImageUpload(file: File): Promise<{ base64String: string; resolution: { width: number; height: number } }> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -890,7 +894,12 @@ async function handleImageUpload(file: File): Promise<{ base64String: string; re
     });
 }
 
-// 创建图片预览元素
+/**
+ * 创建图片预览元素
+ * @param base64Image Base64格式的图片
+ * @param resolution 图片分辨率
+ * @returns 预览元素
+ */
 function createImagePreview(base64Image: string, resolution?: { width: number; height: number }): HTMLElement {
     const container = document.createElement('div');
     container.className = 'image-preview-container';
@@ -966,7 +975,9 @@ imageInput.addEventListener('change', async (event) => {
     }
 });
 
-// 添加截图功能
+/**
+ * 捕获屏幕截图
+ */
 async function captureScreenshot(): Promise<void> {
     const { ipcRenderer } = require('electron');
     
@@ -1042,62 +1053,7 @@ async function autoExecute(): Promise<void> {
 
             // 3. 调用模型获取响应
             console.log('发送请求到本地模型...');
-            const response = await fetch('http://localhost:8001/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    messages: [
-                        { 
-                            role: 'system', 
-                            content: systemPrompt,
-                            name: 'system'
-                        },
-                        ...messageHistory.map(msg => {
-                            const msgObj: any = {
-                                role: msg.role,
-                                name: msg.role === 'user' ? 'user' : 'assistant',
-                                content: msg.content
-                            };
-                            
-                            if (msg.image) {
-                                msgObj.content = [
-                                    {
-                                        type: "text",
-                                        text: msg.content || "请分析这张图片"
-                                    },
-                                    {
-                                        type: "image_url",
-                                        image_url: {
-                                            url: msg.image
-                                        }
-                                    }
-                                ];
-                            }
-                            
-                            return msgObj;
-                        })
-                    ],
-                    model: 'ui-tars',
-                    temperature: 0,
-                    max_tokens: 128000,
-                    stream: false
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data: ApiResponse = await response.json();
-            console.log('收到模型响应:', data);
-            
-            if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-                throw new Error('模型响应格式不正确');
-            }
-
-            const botResponse = data.choices[0].message.content;
+            const botResponse = await callModelAPI(messageHistory, MAX_TOKENS);
             messageHistory.push({ role: 'assistant', content: botResponse });
 
             // 4. 执行模型返回的操作
@@ -1136,12 +1092,7 @@ async function autoExecute(): Promise<void> {
         
         // 更新界面显示所有消息历史
         console.log('更新消息历史...');
-        chatMessages.innerHTML = '';
-        messageHistory.forEach(msg => {
-            if (msg.role === 'user' || msg.role === 'assistant') {
-                addMessage(msg.content, msg.role === 'user', msg.image);
-            }
-        });
+        updateChatMessages();
         
         // 清空输入框
         messageInput.value = '';
@@ -1149,5 +1100,65 @@ async function autoExecute(): Promise<void> {
     }
 }
 
+/**
+ * 更新聊天消息界面
+ */
+function updateChatMessages(): void {
+    chatMessages.innerHTML = '';
+    messageHistory.forEach(msg => {
+        if (msg.role === 'user' || msg.role === 'assistant') {
+            addMessage(msg.content, msg.role === 'user', msg.image);
+        }
+    });
+}
+
 // 添加按钮事件监听器
 autoExecuteButton.addEventListener('click', autoExecute);
+
+/**
+ * 保存对话历史记录
+ * @param conversationPath 对话保存路径
+ * @param timestamp 时间戳
+ */
+async function saveConversationLog(conversationPath: string, timestamp: string): Promise<void> {
+    const conversationLog = {
+        timestamp: new Date().toISOString(),
+        systemPrompt: systemPrompt,
+        messages: messageHistory.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date().toISOString(),
+            image: msg.image ? {
+                path: `${conversationPath}/image_${timestamp}.png`,
+                resolution: msg.image ? {
+                    width: 1470,
+                    height: 956
+                } : undefined
+            } : undefined
+        }))
+    };
+
+    // 将对话记录保存为JSON文件
+    const logPath = `${conversationPath}/conversation_log.json`;
+    require('fs').writeFileSync(logPath, JSON.stringify(conversationLog, null, 2));
+}
+
+/**
+ * 创建会话记录文件夹
+ * @returns {Object} 包含会话路径和时间戳
+ */
+function createConversationDirectory(): { conversationPath: string, timestamp: string } {
+    const desktopPath = require('os').homedir() + '/Desktop';
+    const conversationFolder = `${desktopPath}/model_conversations`;
+    
+    if (!require('fs').existsSync(conversationFolder)) {
+        require('fs').mkdirSync(conversationFolder, { recursive: true });
+    }
+
+    // 创建新的对话记录文件夹（使用时间戳）
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const conversationPath = `${conversationFolder}/conversation_${timestamp}`;
+    require('fs').mkdirSync(conversationPath, { recursive: true });
+    
+    return { conversationPath, timestamp };
+}
