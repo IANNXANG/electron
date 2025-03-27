@@ -21,7 +21,7 @@ interface Coordinates {
 }
 
 // 控制模型最大token数
-const MAX_TOKENS: number = 30000;
+const MAX_TOKENS: number = 2048;
 
 // 存储对话历史
 let messageHistory: Message[] = [];
