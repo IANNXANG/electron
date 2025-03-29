@@ -108,7 +108,10 @@ systemPrompt = `你是一个智能GUI操作助手。你的主要职责是分析�
 - 操作前要充分思考和规划
 - 确保操作安全且有效
 - 每次输出的动作只可以有一个
-- 如需执行多个连续动作，请使用分号(;)将每个动作分隔开，如：click(100,200);type(content='hello');hotkey(key='enter')
+- 如需执行多个连续动作，可以使用以下两种方式之一：
+  1. 使用空格将每个动作分隔开，如：click(100,200) type(content='hello') hotkey(key='enter')
+  2. 使用分号(;)将每个动作分隔开，如：click(100,200);type(content='hello');hotkey(key='enter')
+  
 
 如果遇到无法处理的情况，请说明原因并请求用户协助。`;
 }else if(uitarsprompt === 3){
@@ -286,14 +289,35 @@ async function convertCoordinates(x: number, y: number): Promise<{ x: number, y:
 async function performMouseOperations(message: string): Promise<boolean> {
     const { mouse, Button, keyboard, Key } = require('@nut-tree/nut-js');
 
-    // 首先检查消息是否包含多个操作（以分号分隔）
-    if (message.includes(';')) {
-        const operations = message.split(';').map(op => op.trim()).filter(op => op);
+    // 使用正则表达式识别所有可能的操作命令，无论是用空格还是分号分隔
+    const operations = [];
+    
+    // 匹配标准格式的操作
+    const standardOperationRegex = /(click\(\d+,\d+\)|left_double\(\d+,\d+\)|right_single\(\d+,\d+\)|drag\(\(\d+,\d+\),\(\d+,\d+\)\)|type\(content='[^']*'\)|hotkey\(key='[^']*'\)|scroll\(\(\d+,\d+\),\s*direction='(up|down|left|right)'\)|wait\(\)|finished\(\)|call_user\(\))/g;
+    
+    // 匹配新格式的操作
+    const newFormatRegex = /(click\(start_box='[\[\(]\d+,\d+[\]\)]'\)|left_double\(start_box='[\[\(]\d+,\d+[\]\)]'\)|right_single\(start_box='[\[\(]\d+,\d+[\]\)]'\)|drag\(start_box='[\[\(]\d+,\d+[\]\)]',\s*end_box='[\[\(]\d+,\d+[\]\)]'\)|scroll\(start_box='[\[\(]\d+,\d+[\]\)]',\s*direction='(up|down|left|right)'\))/g;
+    
+    // 提取所有标准格式操作
+    let match;
+    while ((match = standardOperationRegex.exec(message)) !== null) {
+        operations.push(match[0]);
+    }
+    
+    // 提取所有新格式操作
+    let newFormatMatch;
+    while ((newFormatMatch = newFormatRegex.exec(message)) !== null) {
+        operations.push(newFormatMatch[0]);
+    }
+    
+    // 如果找到多个操作，则依次执行
+    if (operations.length > 1) {
         console.log('检测到多个操作:', operations);
         
         let allSuccessful = true;
         for (const operation of operations) {
             try {
+                // 递归调用单个操作
                 const result = await performMouseOperations(operation);
                 if (!result) {
                     allSuccessful = false;
@@ -308,6 +332,8 @@ async function performMouseOperations(message: string): Promise<boolean> {
         }
         return allSuccessful;
     }
+    
+    // 以下代码处理单个操作
 
     // 匹配新格式的点击操作 - start_box格式
     const newClickMatch = message.match(/click\(start_box='[\[\(](\d+),(\d+)[\]\)]'\)/);
