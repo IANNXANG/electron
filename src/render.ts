@@ -108,6 +108,7 @@ systemPrompt = `你是一个智能GUI操作助手。你的主要职责是分析�
 - 操作前要充分思考和规划
 - 确保操作安全且有效
 - 每次输出的动作只可以有一个
+- 如需执行多个连续动作，请使用分号(;)将每个动作分隔开，如：click(100,200);type(content='hello');hotkey(key='enter')
 
 如果遇到无法处理的情况，请说明原因并请求用户协助。`;
 }else if(uitarsprompt === 3){
@@ -284,6 +285,29 @@ async function convertCoordinates(x: number, y: number): Promise<{ x: number, y:
 // 鼠标操作函数
 async function performMouseOperations(message: string): Promise<boolean> {
     const { mouse, Button, keyboard, Key } = require('@nut-tree/nut-js');
+
+    // 首先检查消息是否包含多个操作（以分号分隔）
+    if (message.includes(';')) {
+        const operations = message.split(';').map(op => op.trim()).filter(op => op);
+        console.log('检测到多个操作:', operations);
+        
+        let allSuccessful = true;
+        for (const operation of operations) {
+            try {
+                const result = await performMouseOperations(operation);
+                if (!result) {
+                    allSuccessful = false;
+                    console.warn(`操作 "${operation}" 执行失败`);
+                }
+                // 在每个操作之间添加短暂延迟
+                await sleep(300);
+            } catch (error) {
+                console.error(`执行操作 "${operation}" 时出错:`, error);
+                allSuccessful = false;
+            }
+        }
+        return allSuccessful;
+    }
 
     // 匹配新格式的点击操作 - start_box格式
     const newClickMatch = message.match(/click\(start_box='[\[\(](\d+),(\d+)[\]\)]'\)/);
