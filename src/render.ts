@@ -31,10 +31,10 @@ let systemPrompt: string = ''
 
 // 选择提示词，四个提示词的作用分别是：
 // 1. 原始UI-tars
-// 2. 中文
+// 2. 中文（周阳）
 // 3. 魔改UI-tars
 // 4. 空白
-const uitarsprompt: number = 3;
+const uitarsprompt: number = 2;
 if(uitarsprompt === 1){
 systemPrompt = `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 
@@ -81,6 +81,8 @@ systemPrompt = `你是一个智能GUI操作助手。你的主要职责是分析�
 - type(content='文本') - 输入指定文本
 - scroll((x,y), direction='up/down/left/right') - 在指定位置滚动
 - hotkey(key='快捷键') - 执行键盘快捷键
+- finished() - 完成任务
+- call_user() - 请求用户协助
 
 3. 响应格式规范
 你必须严格按照以下格式输出：
@@ -105,6 +107,7 @@ systemPrompt = `你是一个智能GUI操作助手。你的主要职责是分析�
 - 坐标值必须准确
 - 操作前要充分思考和规划
 - 确保操作安全且有效
+- 每次输出的动作只可以有一个
 
 如果遇到无法处理的情况，请说明原因并请求用户协助。`;
 }else if(uitarsprompt === 3){
