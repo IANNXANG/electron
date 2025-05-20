@@ -20,6 +20,27 @@ interface Coordinates {
     y: number;
 }
 
+// 加载环境变量
+require('dotenv').config();
+
+// 从环境变量获取API配置
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+const OPENROUTER_API_URL = process.env.OPENROUTER_API_URL || '';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || '';
+
+// 如果没有找到API密钥，提示用户创建.env文件
+if (!OPENROUTER_API_KEY) {
+    console.warn(`
+警告: API密钥未设置。请在项目根目录创建.env文件，内容如下:
+
+OPENROUTER_API_KEY=你的API密钥
+OPENROUTER_API_URL=https://openrouter.ai/api/v1/chat/completions
+OPENROUTER_MODEL=qwen/qwen2.5-vl-32b-Instruct
+
+然后重启应用。
+`);
+}
+
 // 控制模型最大token数
 const MAX_TOKENS: number = 2048;
 
@@ -149,10 +170,13 @@ call_user() # Submit the task and call the user when the task is unsolvable, or 
  * @returns 模型响应
  */
 async function callModelAPI(messages: Message[], maxTokens: number = MAX_TOKENS): Promise<string> {
-    const response = await fetch('http://localhost:8001/v1/chat/completions', {
+    const response = await fetch(OPENROUTER_API_URL, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+            'HTTP-Referer': 'https://github.com/yourusername/yourrepo', // 请替换为你的实际referer
+            'X-Title': 'GUI Agent' // 你的应用名称
         },
         body: JSON.stringify({
             messages: [
@@ -186,7 +210,7 @@ async function callModelAPI(messages: Message[], maxTokens: number = MAX_TOKENS)
                     return msgObj;
                 })
             ],
-            model: 'ui-tars',
+            model: OPENROUTER_MODEL,
             temperature: 0,
             max_tokens: maxTokens,
             stream: false
@@ -577,7 +601,40 @@ async function performMouseOperations(message: string): Promise<boolean> {
     if (typeMatch) {
         const text = typeMatch[1];
         try {
-            await keyboard.type(text);
+            // 使用clipboard API实现一次性粘贴
+            const { clipboard } = require('electron');
+            
+            // 保存原始剪贴板内容
+            const originalClipboardContent = clipboard.readText();
+            
+            // 设置要输入的文本到剪贴板
+            clipboard.writeText(text);
+            
+            // 使用热键粘贴（Cmd+V 或 Ctrl+V）
+            if (process.platform === 'darwin') {
+                // macOS
+                await keyboard.pressKey(Key.LeftCmd);
+                await sleep(50);
+                await keyboard.pressKey(Key.V);
+                await sleep(50);
+                await keyboard.releaseKey(Key.V);
+                await sleep(50);
+                await keyboard.releaseKey(Key.LeftCmd);
+            } else {
+                // Windows/Linux
+                await keyboard.pressKey(Key.LeftControl);
+                await sleep(50);
+                await keyboard.pressKey(Key.V);
+                await sleep(50);
+                await keyboard.releaseKey(Key.V);
+                await sleep(50);
+                await keyboard.releaseKey(Key.LeftControl);
+            }
+            
+            // 恢复原始剪贴板内容
+            await sleep(100);
+            clipboard.writeText(originalClipboardContent);
+            
             addMessage(`已输入文本：${text}`, true);
             return true;
         } catch (error) {
