@@ -313,7 +313,7 @@ async function convertCoordinates(x: number, y: number): Promise<{ x: number, y:
 async function performMouseOperations(message: string): Promise<boolean> {
     const { mouse, Button, keyboard, Key } = require('@nut-tree/nut-js');
 
-    // 使用正则表达式识别所有可能的操作命令，无论是用空格还是分号分隔
+    // 使用正则表达式识别所有可能的操作命令，不论中间有什么文本
     const operations = [];
     
     // 匹配标准格式的操作
@@ -334,15 +334,16 @@ async function performMouseOperations(message: string): Promise<boolean> {
         operations.push(newFormatMatch[0]);
     }
     
-    // 如果找到多个操作，则依次执行
-    if (operations.length > 1) {
-        console.log('检测到多个操作:', operations);
+    // 如果找到操作，则依次执行所有操作（不再检查是否多于1个）
+    if (operations.length > 0) {
+        console.log('从文本中提取到操作命令:', operations);
         
         let allSuccessful = true;
         for (const operation of operations) {
             try {
-                // 递归调用单个操作
-                const result = await performMouseOperations(operation);
+                // 对每个单独的操作调用自身（递归）
+                // 通过传递单个操作字符串，会走到下面的单操作处理逻辑
+                const result = await executeOperation(operation);
                 if (!result) {
                     allSuccessful = false;
                     console.warn(`操作 "${operation}" 执行失败`);
@@ -357,8 +358,14 @@ async function performMouseOperations(message: string): Promise<boolean> {
         return allSuccessful;
     }
     
-    // 以下代码处理单个操作
+    // 以下执行单个操作的处理
+    return await executeOperation(message);
+}
 
+// 处理单个操作的函数
+async function executeOperation(message: string): Promise<boolean> {
+    const { mouse, Button, keyboard, Key } = require('@nut-tree/nut-js');
+    
     // 匹配新格式的点击操作 - start_box格式
     const newClickMatch = message.match(/click\(start_box='[\[\(](\d+),(\d+)[\]\)]'\)/);
     if (newClickMatch) {
